@@ -4,7 +4,7 @@ import { useState, useMemo } from "react"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { useFilteredCalls, useMetrics } from "@/hooks/use-filtered-calls"
-import { useDashboardStats, useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
+import { useDashboardStats, useCalls, useDropdownOptions } from "@/hooks/use-dashboard-data"
 import type { Filters } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -45,18 +45,18 @@ export default function DashboardPage() {
   // Fetch data from Supabase
   const { stats, loading: statsLoading, error: statsError } = useDashboardStats()
   const { calls: supabaseCalls, loading: callsLoading } = useCalls()
-  const { salesReps: supabaseSalesReps, loading: repsLoading } = useSalesReps()
+  const { options, loading: optionsLoading } = useDropdownOptions()
 
   // Use Supabase data directly
   const calls = supabaseCalls
-  const salesReps = supabaseSalesReps
+  const salesReps = options.salesReps
 
   const filteredCalls = useFilteredCalls(calls, filters)
   const metrics = useMetrics(filteredCalls)
 
   const salesRepData = useMemo(() => {
     return salesReps.map((rep) => {
-      const repCalls = filteredCalls.filter((c) => c.sales_rep === rep)
+      const repCalls = filteredCalls.filter((c) => c.sales_rep === rep.name)
       const confirmedCalls = repCalls.filter((c) => c.confirmation_status === "yes").length
       const showUps = repCalls.filter((c) => c.show_up_status === "yes").length
       const closes = repCalls.filter((c) => c.call_outcome === "closed_won").length
@@ -65,7 +65,7 @@ export default function DashboardPage() {
       const revenuePerShowUp = showUps > 0 ? totalRevenue / showUps : 0
 
       return {
-        name: rep,
+        name: rep.name,
         confirmedCalls,
         showUps,
         closes,
@@ -74,7 +74,7 @@ export default function DashboardPage() {
         revenuePerShowUp,
       }
     }).sort((a, b) => b.totalRevenue - a.totalRevenue)
-  }, [filteredCalls])
+  }, [filteredCalls, salesReps])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -88,15 +88,29 @@ export default function DashboardPage() {
     return `${value.toFixed(1)}%`
   }
 
-  const isLoading = statsLoading || callsLoading || repsLoading
+  const isLoading = statsLoading || callsLoading || optionsLoading
 
   return (
     <div className="space-y-8">
-      <FilterBar filters={filters} onFiltersChange={setFilters} />
+      <FilterBar 
+        filters={filters} 
+        onFiltersChange={setFilters}
+        salesReps={options.salesReps}
+        utmSources={options.utmSources}
+        utmMediums={options.utmMediums}
+        utmCampaigns={options.utmCampaigns}
+        utmContents={options.utmContents}
+      />
 
       {statsError && (
         <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
-          Error loading data: {statsError}. Showing mock data instead.
+          Error loading data: {statsError}. Showing filtered data instead.
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="text-center text-muted-foreground py-4">
+          Loading data...
         </div>
       )}
 

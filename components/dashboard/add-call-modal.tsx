@@ -21,24 +21,59 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus } from "lucide-react"
-import { salesReps, utmSources, utmMediums, utmCampaigns, utmContents, callTypes, mockLeads } from "@/lib/mock-data"
-import type { Call } from "@/lib/types"
+import type { Lead, SalesRep } from "@/hooks/use-dashboard-data"
 
-interface AddCallModalProps {
-  onAdd: (call: Call) => void
+export interface AddCallData {
+  lead_id: string
+  sales_rep_id: number
+  booking_date: string
+  call_date: string
+  booking_status: string
+  confirmation_status: string
+  show_up_status: string
+  call_outcome: string
+  quality_score: number
+  upfront_revenue: number
+  call_type: string
+  utm_source: string
+  utm_medium: string
+  utm_campaign: string
+  utm_content: string
 }
 
-export function AddCallModal({ onAdd }: AddCallModalProps) {
+interface AddCallModalProps {
+  onAdd: (callData: AddCallData) => void
+  leads: Lead[]
+  salesReps: SalesRep[]
+  callTypes?: string[]
+  utmSources?: string[]
+  utmMediums?: string[]
+  utmCampaigns?: string[]
+  utmContents?: string[]
+  loading?: boolean
+}
+
+export function AddCallModal({ 
+  onAdd, 
+  leads = [],
+  salesReps = [],
+  callTypes = [],
+  utmSources = [],
+  utmMediums = [],
+  utmCampaigns = [],
+  utmContents = [],
+  loading = false,
+}: AddCallModalProps) {
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({
     lead_id: "",
-    sales_rep: "",
+    sales_rep_id: "",
     booking_date: "",
     call_date: "",
-    booking_status: "scheduled" as const,
-    confirmation_status: "pending" as const,
-    show_up_status: "pending" as const,
-    call_outcome: "pending" as const,
+    booking_status: "scheduled",
+    confirmation_status: "pending",
+    show_up_status: "pending",
+    call_outcome: "pending",
     quality_score: "3",
     upfront_revenue: "0",
     call_type: "",
@@ -50,12 +85,10 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const lead = mockLeads.find((l) => l.id === formData.lead_id)
-    const newCall: Call = {
-      id: `call_${Date.now()}`,
+    
+    const callData: AddCallData = {
       lead_id: formData.lead_id,
-      lead_name: lead?.name || "Unknown",
-      sales_rep: formData.sales_rep,
+      sales_rep_id: parseInt(formData.sales_rep_id),
       booking_date: formData.booking_date,
       call_date: formData.call_date,
       booking_status: formData.booking_status,
@@ -70,11 +103,12 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
       utm_campaign: formData.utm_campaign,
       utm_content: formData.utm_content,
     }
-    onAdd(newCall)
+    
+    onAdd(callData)
     setOpen(false)
     setFormData({
       lead_id: "",
-      sales_rep: "",
+      sales_rep_id: "",
       booking_date: "",
       call_date: "",
       booking_status: "scheduled",
@@ -94,7 +128,7 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button disabled={loading}>
           <Plus className="mr-2 h-4 w-4" />
           Add Call
         </Button>
@@ -112,7 +146,7 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                   <SelectValue placeholder="Select lead" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockLeads.map((lead) => (
+                  {leads.map((lead) => (
                     <SelectItem key={lead.id} value={lead.id}>
                       {lead.name}
                     </SelectItem>
@@ -122,14 +156,14 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
             </div>
             <div className="space-y-2">
               <Label>Sales Rep</Label>
-              <Select value={formData.sales_rep} onValueChange={(v) => setFormData({ ...formData, sales_rep: v })}>
+              <Select value={formData.sales_rep_id} onValueChange={(v) => setFormData({ ...formData, sales_rep_id: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select rep" />
                 </SelectTrigger>
                 <SelectContent>
                   {salesReps.map((rep) => (
-                    <SelectItem key={rep} value={rep}>
-                      {rep}
+                    <SelectItem key={rep.id} value={rep.id.toString()}>
+                      {rep.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -144,6 +178,7 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                 type="date"
                 value={formData.booking_date}
                 onChange={(e) => setFormData({ ...formData, booking_date: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
@@ -152,6 +187,7 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                 type="date"
                 value={formData.call_date}
                 onChange={(e) => setFormData({ ...formData, call_date: e.target.value })}
+                required
               />
             </div>
           </div>
@@ -161,7 +197,7 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
               <Label>Booking Status</Label>
               <Select
                 value={formData.booking_status}
-                onValueChange={(v: "scheduled" | "canceled") => setFormData({ ...formData, booking_status: v })}
+                onValueChange={(v) => setFormData({ ...formData, booking_status: v })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -179,11 +215,20 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {callTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
+                  {callTypes.length > 0 ? (
+                    callTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="discovery">Discovery</SelectItem>
+                      <SelectItem value="demo">Demo</SelectItem>
+                      <SelectItem value="follow_up">Follow Up</SelectItem>
+                      <SelectItem value="closing">Closing</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -219,11 +264,15 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                   <SelectValue placeholder="Select source" />
                 </SelectTrigger>
                 <SelectContent>
-                  {utmSources.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
+                  {utmSources.length > 0 ? (
+                    utmSources.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="direct">Direct</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -234,11 +283,15 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                   <SelectValue placeholder="Select medium" />
                 </SelectTrigger>
                 <SelectContent>
-                  {utmMediums.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
+                  {utmMediums.length > 0 ? (
+                    utmMediums.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none">None</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -252,11 +305,15 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                   <SelectValue placeholder="Select campaign" />
                 </SelectTrigger>
                 <SelectContent>
-                  {utmCampaigns.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
+                  {utmCampaigns.length > 0 ? (
+                    utmCampaigns.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none">None</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -267,18 +324,22 @@ export function AddCallModal({ onAdd }: AddCallModalProps) {
                   <SelectValue placeholder="Select content" />
                 </SelectTrigger>
                 <SelectContent>
-                  {utmContents.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
+                  {utmContents.length > 0 ? (
+                    utmContents.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none">None</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <Button type="submit" className="w-full mt-4">
-            Add Call
+          <Button type="submit" className="w-full mt-4" disabled={loading}>
+            {loading ? "Adding..." : "Add Call"}
           </Button>
         </form>
       </DialogContent>

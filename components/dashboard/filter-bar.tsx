@@ -11,14 +11,27 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Filters } from "@/lib/types"
-import { salesReps, utmSources, utmMediums, utmCampaigns, utmContents } from "@/lib/mock-data"
+import type { SalesRep } from "@/hooks/use-dashboard-data"
 
 interface FilterBarProps {
   filters: Filters
   onFiltersChange: (filters: Filters) => void
+  salesReps?: SalesRep[]
+  utmSources?: string[]
+  utmMediums?: string[]
+  utmCampaigns?: string[]
+  utmContents?: string[]
 }
 
-export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
+export function FilterBar({ 
+  filters, 
+  onFiltersChange,
+  salesReps = [],
+  utmSources = [],
+  utmMediums = [],
+  utmCampaigns = [],
+  utmContents = [],
+}: FilterBarProps) {
   const updateFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => {
     onFiltersChange({ ...filters, [key]: value })
   }
@@ -68,8 +81,8 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
         <SelectContent>
           <SelectItem value="all">All Reps</SelectItem>
           {salesReps.map((rep) => (
-            <SelectItem key={rep} value={rep}>
-              {rep}
+            <SelectItem key={rep.id} value={rep.name}>
+              {rep.name}
             </SelectItem>
           ))}
         </SelectContent>

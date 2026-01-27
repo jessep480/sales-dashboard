@@ -50,6 +50,21 @@ export interface Lead {
   created_at: string
 }
 
+export interface SalesRep {
+  id: number
+  name: string
+}
+
+export interface DropdownOptions {
+  salesReps: SalesRep[]
+  utmSources: string[]
+  utmMediums: string[]
+  utmCampaigns: string[]
+  utmContents: string[]
+  callTypes: string[]
+  leadSources: string[]
+}
+
 export function useDashboardStats() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -95,12 +110,6 @@ export function useCalls() {
         if (salesRepsResult.error) throw salesRepsResult.error
         if (leadsResult.error) throw leadsResult.error
 
-        // Debug logging
-        console.log('SUPABASE DEBUG - Calls count:', callsResult.data?.length)
-        console.log('SUPABASE DEBUG - Sales reps count:', salesRepsResult.data?.length)
-        console.log('SUPABASE DEBUG - Leads count:', leadsResult.data?.length)
-        console.log('SUPABASE DEBUG - First call raw:', callsResult.data?.[0])
-
         // Create lookup maps for sales reps and leads
         const salesRepsMap = new Map<number, string>()
         salesRepsResult.data?.forEach((rep: any) => {
@@ -111,8 +120,6 @@ export function useCalls() {
         leadsResult.data?.forEach((lead: any) => {
           leadsMap.set(lead.id, lead.name)
         })
-
-        console.log('SUPABASE DEBUG - Sales reps map:', Object.fromEntries(salesRepsMap))
 
         // Transform data to match the expected Call interface
         const transformedCalls: Call[] = (callsResult.data || []).map((call: any) => ({
@@ -135,12 +142,8 @@ export function useCalls() {
           utm_content: call.utm_content || '',
         }))
 
-        console.log('SUPABASE DEBUG - First transformed call:', transformedCalls[0])
-        console.log('SUPABASE DEBUG - Total transformed calls:', transformedCalls.length)
-
         setCalls(transformedCalls)
       } catch (err) {
-        console.error('SUPABASE DEBUG - Error:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch calls')
       } finally {
         setLoading(false)
@@ -183,7 +186,7 @@ export function useLeads() {
 }
 
 export function useSalesReps() {
-  const [salesReps, setSalesReps] = useState<string[]>([])
+  const [salesReps, setSalesReps] = useState<SalesRep[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -192,12 +195,12 @@ export function useSalesReps() {
       try {
         const { data, error } = await supabase
           .from('sales_reps')
-          .select('name')
+          .select('id, name')
           .order('name')
 
         if (error) throw error
 
-        setSalesReps(data?.map(rep => rep.name) || [])
+        setSalesReps(data || [])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch sales reps')
       } finally {
@@ -209,4 +212,147 @@ export function useSalesReps() {
   }, [])
 
   return { salesReps, loading, error }
+}
+
+// Hook to fetch all dropdown options from the database
+export function useDropdownOptions() {
+  const [options, setOptions] = useState<DropdownOptions>({
+    salesReps: [],
+    utmSources: [],
+    utmMediums: [],
+    utmCampaigns: [],
+    utmContents: [],
+    callTypes: [],
+    leadSources: [],
+  })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function fetchOptions() {
+      try {
+        // Fetch sales reps
+        const salesRepsResult = await supabase
+          .from('sales_reps')
+          .select('id, name')
+          .order('name')
+
+        if (salesRepsResult.error) throw salesRepsResult.error
+
+        // Fetch distinct UTM and call type values from calls table
+        const callsResult = await supabase
+          .from('calls')
+          .select('utm_source, utm_medium, utm_campaign, utm_content, call_type')
+
+        if (callsResult.error) throw callsResult.error
+
+        // Fetch distinct lead sources from leads table
+        const leadsResult = await supabase
+          .from('leads')
+          .select('lead_source')
+
+        if (leadsResult.error) throw leadsResult.error
+
+        // Extract unique values
+        const utmSources = [...new Set(callsResult.data?.map(c => c.utm_source).filter(Boolean) || [])]
+        const utmMediums = [...new Set(callsResult.data?.map(c => c.utm_medium).filter(Boolean) || [])]
+        const utmCampaigns = [...new Set(callsResult.data?.map(c => c.utm_campaign).filter(Boolean) || [])]
+        const utmContents = [...new Set(callsResult.data?.map(c => c.utm_content).filter(Boolean) || [])]
+        const callTypes = [...new Set(callsResult.data?.map(c => c.call_type).filter(Boolean) || [])]
+        const leadSources = [...new Set(leadsResult.data?.map(l => l.lead_source).filter(Boolean) || [])]
+
+        setOptions({
+          salesReps: salesRepsResult.data || [],
+          utmSources: utmSources.sort(),
+          utmMediums: utmMediums.sort(),
+          utmCampaigns: utmCampaigns.sort(),
+          utmContents: utmContents.sort(),
+          callTypes: callTypes.sort(),
+          leadSources: leadSources.sort(),
+        })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch dropdown options')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchOptions()
+  }, [])
+
+  return { options, loading, error }
+}
+
+// Mutation functions for adding/updating records
+
+export async function addCall(callData: {
+  lead_id: string
+  sales_rep_id: number
+  booking_date: string
+  call_date: string
+  booking_status: string
+  confirmation_status: string
+  show_up_status: string
+  call_outcome: string
+  quality_score: number
+  upfront_revenue: number
+  call_type: string
+  utm_source: string
+  utm_medium: string
+  utm_campaign: string
+  utm_content: string
+}) {
+  const { data, error } = await supabase
+    .from('calls')
+    .insert(callData)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateCall(id: string, updates: Partial<{
+  lead_id: string
+  sales_rep_id: number
+  booking_date: string
+  call_date: string
+  booking_status: string
+  confirmation_status: string
+  show_up_status: string
+  call_outcome: string
+  quality_score: number
+  upfront_revenue: number
+  call_type: string
+  utm_source: string
+  utm_medium: string
+  utm_campaign: string
+  utm_content: string
+}>) {
+  const { data, error } = await supabase
+    .from('calls')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function addLead(leadData: {
+  name: string
+  email: string
+  phone: string
+  lead_source: string
+  hubspot_id?: string
+}) {
+  const { data, error } = await supabase
+    .from('leads')
+    .insert(leadData)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }

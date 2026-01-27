@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { AddLeadModal } from "@/components/dashboard/add-lead-modal"
-import { useCalls, useLeads } from "@/hooks/use-dashboard-data"
-import type { Lead, Call } from "@/lib/types"
+import { useState, useMemo, useCallback } from "react"
+import { AddLeadModal, AddLeadData } from "@/components/dashboard/add-lead-modal"
+import { useCalls, useLeads, useDropdownOptions, addLead } from "@/hooks/use-dashboard-data"
+import type { Lead, Call } from "@/hooks/use-dashboard-data"
 import {
   Table,
   TableBody,
@@ -33,12 +33,15 @@ interface LeadWithCalls extends Lead {
 
 export default function LeadsPage() {
   // Fetch data from Supabase
-  const { leads: supabaseLeads } = useLeads()
-  const { calls: supabaseCalls } = useCalls()
+  const { leads: supabaseLeads, loading: leadsLoading, error: leadsError } = useLeads()
+  const { calls: supabaseCalls, loading: callsLoading } = useCalls()
+  const { options, loading: optionsLoading } = useDropdownOptions()
 
   const [sortKey, setSortKey] = useState<SortKey>("name")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [expandedLeads, setExpandedLeads] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Use Supabase data directly
   const leads = supabaseLeads
@@ -86,10 +89,19 @@ export default function LeadsPage() {
     setExpandedLeads(newExpanded)
   }
 
-  const handleAddLead = (newLead: Lead) => {
-    // TODO: Implement Supabase insert
-    console.log('Add lead:', newLead)
-  }
+  const handleAddLead = useCallback(async (leadData: AddLeadData) => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await addLead(leadData)
+      // Refresh the page to show new data
+      window.location.reload()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to add lead')
+    } finally {
+      setSaving(false)
+    }
+  }, [])
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
     <Button
@@ -123,15 +135,36 @@ export default function LeadsPage() {
     }).format(amount)
   }
 
+  const isLoading = leadsLoading || callsLoading || optionsLoading
+
   return (
     <div className="space-y-6">
+      {saveError && (
+        <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+          Error: {saveError}
+        </div>
+      )}
+      
+      {leadsError && (
+        <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+          Error loading leads: {leadsError}
+        </div>
+      )}
+
       <div className="flex items-center justify-end">
-        <AddLeadModal onAdd={handleAddLead} />
+        <AddLeadModal 
+          onAdd={handleAddLead}
+          leadSources={options.leadSources}
+          loading={saving || isLoading}
+        />
       </div>
 
       <Card className="border-border bg-card">
         <CardHeader>
-          <CardTitle className="text-card-foreground">All Leads ({leads.length})</CardTitle>
+          <CardTitle className="text-card-foreground">
+            All Leads ({leads.length})
+            {isLoading && <span className="ml-2 text-sm text-muted-foreground">Loading...</span>}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

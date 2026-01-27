@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
-import { AddCallModal } from "@/components/dashboard/add-call-modal"
+import { AddCallModal, AddCallData } from "@/components/dashboard/add-call-modal"
 import { useFilteredCalls } from "@/hooks/use-filtered-calls"
-import { useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
-import type { Filters, Call } from "@/lib/types"
+import { useCalls, useLeads, useDropdownOptions, addCall, updateCall } from "@/hooks/use-dashboard-data"
+import type { Filters } from "@/lib/types"
+import type { Call } from "@/hooks/use-dashboard-data"
 import {
   Table,
   TableBody,
@@ -41,12 +42,15 @@ type SortDirection = "asc" | "desc"
 
 export default function CallsPage() {
   // Fetch data from Supabase
-  const { calls: supabaseCalls } = useCalls()
-  const { salesReps } = useSalesReps()
+  const { calls: supabaseCalls, loading: callsLoading, error: callsError } = useCalls()
+  const { leads, loading: leadsLoading } = useLeads()
+  const { options, loading: optionsLoading } = useDropdownOptions()
 
   const [filters, setFilters] = useState<Filters>(defaultFilters)
   const [sortKey, setSortKey] = useState<SortKey>("booking_date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Use Supabase data directly
   const calls = supabaseCalls
@@ -73,15 +77,41 @@ export default function CallsPage() {
     }
   }
 
-  const handleAddCall = (newCall: Call) => {
-    // TODO: Implement Supabase insert
-    console.log('Add call:', newCall)
-  }
+  const handleAddCall = useCallback(async (callData: AddCallData) => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await addCall(callData)
+      // Refresh the page to show new data
+      window.location.reload()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to add call')
+    } finally {
+      setSaving(false)
+    }
+  }, [])
 
-  const handleUpdateCall = (id: string, field: keyof Call, value: string | number) => {
-    // TODO: Implement Supabase update
-    console.log('Update call:', id, field, value)
-  }
+  const handleUpdateCall = useCallback(async (id: string, field: string, value: string | number) => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      // Handle sales_rep field - need to convert name to ID
+      if (field === 'sales_rep') {
+        const rep = options.salesReps.find(r => r.name === value)
+        if (rep) {
+          await updateCall(id, { sales_rep_id: rep.id })
+        }
+      } else {
+        await updateCall(id, { [field]: value })
+      }
+      // Refresh the page to show updated data
+      window.location.reload()
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to update call')
+    } finally {
+      setSaving(false)
+    }
+  }, [options.salesReps])
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
     <Button
@@ -102,16 +132,51 @@ export default function CallsPage() {
     }).format(amount)
   }
 
+  const isLoading = callsLoading || leadsLoading || optionsLoading
+
   return (
     <div className="space-y-6">
+      {saveError && (
+        <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+          Error: {saveError}
+        </div>
+      )}
+      
+      {callsError && (
+        <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+          Error loading calls: {callsError}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
-        <FilterBar filters={filters} onFiltersChange={setFilters} />
-        <AddCallModal onAdd={handleAddCall} />
+        <FilterBar 
+          filters={filters} 
+          onFiltersChange={setFilters}
+          salesReps={options.salesReps}
+          utmSources={options.utmSources}
+          utmMediums={options.utmMediums}
+          utmCampaigns={options.utmCampaigns}
+          utmContents={options.utmContents}
+        />
+        <AddCallModal 
+          onAdd={handleAddCall}
+          leads={leads}
+          salesReps={options.salesReps}
+          callTypes={options.callTypes}
+          utmSources={options.utmSources}
+          utmMediums={options.utmMediums}
+          utmCampaigns={options.utmCampaigns}
+          utmContents={options.utmContents}
+          loading={saving || isLoading}
+        />
       </div>
 
       <Card className="border-border bg-card">
         <CardHeader>
-          <CardTitle className="text-card-foreground">All Calls ({sortedCalls.length})</CardTitle>
+          <CardTitle className="text-card-foreground">
+            All Calls ({sortedCalls.length})
+            {isLoading && <span className="ml-2 text-sm text-muted-foreground">Loading...</span>}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -145,14 +210,15 @@ export default function CallsPage() {
                       <Select
                         value={call.sales_rep}
                         onValueChange={(v) => handleUpdateCall(call.id, "sales_rep", v)}
+                        disabled={saving}
                       >
                         <SelectTrigger className="h-8 w-32 bg-secondary">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {salesReps.map((rep) => (
-                            <SelectItem key={rep} value={rep}>
-                              {rep}
+                          {options.salesReps.map((rep) => (
+                            <SelectItem key={rep.id} value={rep.name}>
+                              {rep.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -164,6 +230,7 @@ export default function CallsPage() {
                       <Select
                         value={call.booking_status}
                         onValueChange={(v) => handleUpdateCall(call.id, "booking_status", v)}
+                        disabled={saving}
                       >
                         <SelectTrigger className="h-8 w-28 bg-secondary">
                           <SelectValue />
@@ -178,6 +245,7 @@ export default function CallsPage() {
                       <Select
                         value={call.confirmation_status}
                         onValueChange={(v) => handleUpdateCall(call.id, "confirmation_status", v)}
+                        disabled={saving}
                       >
                         <SelectTrigger className="h-8 w-24 bg-secondary">
                           <SelectValue />
@@ -193,6 +261,7 @@ export default function CallsPage() {
                       <Select
                         value={call.show_up_status}
                         onValueChange={(v) => handleUpdateCall(call.id, "show_up_status", v)}
+                        disabled={saving}
                       >
                         <SelectTrigger className="h-8 w-24 bg-secondary">
                           <SelectValue />
@@ -208,6 +277,7 @@ export default function CallsPage() {
                       <Select
                         value={call.call_outcome}
                         onValueChange={(v) => handleUpdateCall(call.id, "call_outcome", v)}
+                        disabled={saving}
                       >
                         <SelectTrigger className="h-8 w-28 bg-secondary">
                           <SelectValue />

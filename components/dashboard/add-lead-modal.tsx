@@ -21,14 +21,26 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus } from "lucide-react"
-import { leadSources } from "@/lib/mock-data"
-import type { Lead } from "@/lib/types"
 
-interface AddLeadModalProps {
-  onAdd: (lead: Lead) => void
+export interface AddLeadData {
+  name: string
+  email: string
+  phone: string
+  lead_source: string
+  hubspot_id?: string
 }
 
-export function AddLeadModal({ onAdd }: AddLeadModalProps) {
+interface AddLeadModalProps {
+  onAdd: (leadData: AddLeadData) => void
+  leadSources?: string[]
+  loading?: boolean
+}
+
+export function AddLeadModal({ 
+  onAdd, 
+  leadSources = [],
+  loading = false,
+}: AddLeadModalProps) {
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
@@ -40,16 +52,16 @@ export function AddLeadModal({ onAdd }: AddLeadModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const newLead: Lead = {
-      id: `lead_${Date.now()}`,
+    
+    const leadData: AddLeadData = {
       name: formData.name,
       email: formData.email,
       phone: formData.phone,
       lead_source: formData.lead_source,
-      hubspot_id: formData.hubspot_id || `hs_${Date.now()}`,
-      created_at: new Date().toISOString().split("T")[0],
+      hubspot_id: formData.hubspot_id || undefined,
     }
-    onAdd(newLead)
+    
+    onAdd(leadData)
     setOpen(false)
     setFormData({
       name: "",
@@ -63,7 +75,7 @@ export function AddLeadModal({ onAdd }: AddLeadModalProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button disabled={loading}>
           <Plus className="mr-2 h-4 w-4" />
           Add Lead
         </Button>
@@ -114,11 +126,21 @@ export function AddLeadModal({ onAdd }: AddLeadModalProps) {
                 <SelectValue placeholder="Select source" />
               </SelectTrigger>
               <SelectContent>
-                {leadSources.map((source) => (
-                  <SelectItem key={source} value={source}>
-                    {source}
-                  </SelectItem>
-                ))}
+                {leadSources.length > 0 ? (
+                  leadSources.map((source) => (
+                    <SelectItem key={source} value={source}>
+                      {source}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <>
+                    <SelectItem value="Website">Website</SelectItem>
+                    <SelectItem value="Referral">Referral</SelectItem>
+                    <SelectItem value="Social Media">Social Media</SelectItem>
+                    <SelectItem value="Cold Call">Cold Call</SelectItem>
+                    <SelectItem value="Trade Show">Trade Show</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -132,8 +154,8 @@ export function AddLeadModal({ onAdd }: AddLeadModalProps) {
             />
           </div>
 
-          <Button type="submit" className="w-full mt-4">
-            Add Lead
+          <Button type="submit" className="w-full mt-4" disabled={loading}>
+            {loading ? "Adding..." : "Add Lead"}
           </Button>
         </form>
       </DialogContent>
