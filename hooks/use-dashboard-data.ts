@@ -84,14 +84,55 @@ export function useCalls() {
   useEffect(() => {
     async function fetchCalls() {
       try {
+        // Join with sales_reps and leads tables to get names
         const { data, error } = await supabase
           .from('calls')
-          .select('*')
+          .select(`
+            id,
+            lead_id,
+            leads!lead_id(name),
+            sales_rep_id,
+            sales_reps!sales_rep_id(name),
+            booking_date,
+            call_date,
+            booking_status,
+            confirmation_status,
+            show_up_status,
+            call_outcome,
+            quality_score,
+            upfront_revenue,
+            call_type,
+            utm_source,
+            utm_medium,
+            utm_campaign,
+            utm_content
+          `)
           .order('call_date', { ascending: false })
 
         if (error) throw error
 
-        setCalls(data || [])
+        // Transform data to match the expected Call interface
+        const transformedCalls: Call[] = (data || []).map((call: any) => ({
+          id: call.id,
+          lead_id: call.lead_id,
+          lead_name: call.leads?.name || 'Unknown',
+          sales_rep: call.sales_reps?.name || 'Unknown',
+          booking_date: call.booking_date,
+          call_date: call.call_date,
+          booking_status: call.booking_status,
+          confirmation_status: call.confirmation_status,
+          show_up_status: call.show_up_status,
+          call_outcome: call.call_outcome,
+          quality_score: call.quality_score || 0,
+          upfront_revenue: call.upfront_revenue || 0,
+          call_type: call.call_type,
+          utm_source: call.utm_source || '',
+          utm_medium: call.utm_medium || '',
+          utm_campaign: call.utm_campaign || '',
+          utm_content: call.utm_content || '',
+        }))
+
+        setCalls(transformedCalls)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch calls')
       } finally {

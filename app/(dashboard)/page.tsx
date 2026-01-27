@@ -59,7 +59,7 @@ export default function DashboardPage() {
       const repCalls = filteredCalls.filter((c) => c.sales_rep === rep)
       const confirmedCalls = repCalls.filter((c) => c.confirmation_status === "yes").length
       const showUps = repCalls.filter((c) => c.show_up_status === "yes").length
-      const closes = repCalls.filter((c) => c.close_status === "yes").length
+      const closes = repCalls.filter((c) => c.call_outcome === "closed_won").length
       const totalRevenue = repCalls.reduce((sum, c) => sum + c.upfront_revenue, 0)
       const closeRateOfShowUps = showUps > 0 ? (closes / showUps) * 100 : 0
       const revenuePerShowUp = showUps > 0 ? totalRevenue / showUps : 0
