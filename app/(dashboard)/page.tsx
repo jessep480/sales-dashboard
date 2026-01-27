@@ -5,7 +5,6 @@ import { MetricCard } from "@/components/dashboard/metric-card"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { useFilteredCalls, useMetrics } from "@/hooks/use-filtered-calls"
 import { useDashboardStats, useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
-import { mockCalls, salesReps as mockSalesReps } from "@/lib/mock-data"
 import type { Filters } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -48,9 +47,9 @@ export default function DashboardPage() {
   const { calls: supabaseCalls, loading: callsLoading } = useCalls()
   const { salesReps: supabaseSalesReps, loading: repsLoading } = useSalesReps()
 
-  // Use Supabase data if available, otherwise fall back to mock data
-  const calls = supabaseCalls.length > 0 ? supabaseCalls : mockCalls
-  const salesReps = supabaseSalesReps.length > 0 ? supabaseSalesReps : mockSalesReps
+  // Use Supabase data directly
+  const calls = supabaseCalls
+  const salesReps = supabaseSalesReps
 
   const filteredCalls = useFilteredCalls(calls, filters)
   const metrics = useMetrics(filteredCalls)
