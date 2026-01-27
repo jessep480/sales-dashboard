@@ -84,48 +84,43 @@ export function useCalls() {
   useEffect(() => {
     async function fetchCalls() {
       try {
-        // Join with sales_reps and leads tables to get names
-        const { data, error } = await supabase
-          .from('calls')
-          .select(`
-            id,
-            lead_id,
-            leads!lead_id(name),
-            sales_rep_id,
-            sales_reps!sales_rep_id(name),
-            booking_date,
-            call_date,
-            booking_status,
-            confirmation_status,
-            show_up_status,
-            call_outcome,
-            quality_score,
-            upfront_revenue,
-            call_type,
-            utm_source,
-            utm_medium,
-            utm_campaign,
-            utm_content
-          `)
-          .order('call_date', { ascending: false })
+        // Fetch all three tables separately and join in JavaScript
+        const [callsResult, salesRepsResult, leadsResult] = await Promise.all([
+          supabase.from('calls').select('*').order('call_date', { ascending: false }),
+          supabase.from('sales_reps').select('id, name'),
+          supabase.from('leads').select('id, name')
+        ])
 
-        if (error) throw error
+        if (callsResult.error) throw callsResult.error
+        if (salesRepsResult.error) throw salesRepsResult.error
+        if (leadsResult.error) throw leadsResult.error
+
+        // Create lookup maps for sales reps and leads
+        const salesRepsMap = new Map<number, string>()
+        salesRepsResult.data?.forEach((rep: any) => {
+          salesRepsMap.set(rep.id, rep.name)
+        })
+
+        const leadsMap = new Map<string, string>()
+        leadsResult.data?.forEach((lead: any) => {
+          leadsMap.set(lead.id, lead.name)
+        })
 
         // Transform data to match the expected Call interface
-        const transformedCalls: Call[] = (data || []).map((call: any) => ({
+        const transformedCalls: Call[] = (callsResult.data || []).map((call: any) => ({
           id: call.id,
           lead_id: call.lead_id,
-          lead_name: call.leads?.name || 'Unknown',
-          sales_rep: call.sales_reps?.name || 'Unknown',
+          lead_name: leadsMap.get(call.lead_id) || 'Unknown',
+          sales_rep: salesRepsMap.get(call.sales_rep_id) || 'Unknown',
           booking_date: call.booking_date,
           call_date: call.call_date,
-          booking_status: call.booking_status,
-          confirmation_status: call.confirmation_status,
-          show_up_status: call.show_up_status,
-          call_outcome: call.call_outcome,
+          booking_status: call.booking_status || '',
+          confirmation_status: call.confirmation_status || '',
+          show_up_status: call.show_up_status || '',
+          call_outcome: call.call_outcome || '',
           quality_score: call.quality_score || 0,
           upfront_revenue: call.upfront_revenue || 0,
-          call_type: call.call_type,
+          call_type: call.call_type || '',
           utm_source: call.utm_source || '',
           utm_medium: call.utm_medium || '',
           utm_campaign: call.utm_campaign || '',
