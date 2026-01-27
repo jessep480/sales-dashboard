@@ -5,6 +5,7 @@ import { FilterBar } from "@/components/dashboard/filter-bar"
 import { AddCallModal, AddCallData } from "@/components/dashboard/add-call-modal"
 import { useFilteredCalls } from "@/hooks/use-filtered-calls"
 import { useCalls, useLeads, useDropdownOptions, addCall, updateCall } from "@/hooks/use-dashboard-data"
+import { parseDbError } from "@/lib/utils"
 import type { Filters } from "@/lib/types"
 import type { Call } from "@/hooks/use-dashboard-data"
 import {
@@ -85,7 +86,7 @@ export default function CallsPage() {
       // Refresh the page to show new data
       window.location.reload()
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to add call')
+      setSaveError(parseDbError(err))
     } finally {
       setSaving(false)
     }
@@ -107,7 +108,7 @@ export default function CallsPage() {
       // Refresh the page to show updated data
       window.location.reload()
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to update call')
+      setSaveError(parseDbError(err))
     } finally {
       setSaving(false)
     }

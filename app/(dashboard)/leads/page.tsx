@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from "react"
 import { AddLeadModal, AddLeadData } from "@/components/dashboard/add-lead-modal"
 import { useCalls, useLeads, useDropdownOptions, addLead } from "@/hooks/use-dashboard-data"
+import { parseDbError } from "@/lib/utils"
 import type { Lead, Call } from "@/hooks/use-dashboard-data"
 import {
   Table,
@@ -97,7 +98,7 @@ export default function LeadsPage() {
       // Refresh the page to show new data
       window.location.reload()
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to add lead')
+      setSaveError(parseDbError(err))
     } finally {
       setSaving(false)
     }

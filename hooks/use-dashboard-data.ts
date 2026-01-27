@@ -214,7 +214,7 @@ export function useSalesReps() {
   return { salesReps, loading, error }
 }
 
-// Hook to fetch all dropdown options from the database
+// Hook to fetch all dropdown options from the database using optimized RPC
 export function useDropdownOptions() {
   const [options, setOptions] = useState<DropdownOptions>({
     salesReps: [],
@@ -231,45 +231,22 @@ export function useDropdownOptions() {
   useEffect(() => {
     async function fetchOptions() {
       try {
-        // Fetch sales reps
-        const salesRepsResult = await supabase
-          .from('sales_reps')
-          .select('id, name')
-          .order('name')
+        // Use the optimized RPC function that returns all dropdown values in one query
+        const { data, error } = await supabase.rpc('get_dropdown_options')
 
-        if (salesRepsResult.error) throw salesRepsResult.error
+        if (error) throw error
 
-        // Fetch distinct UTM and call type values from calls table
-        const callsResult = await supabase
-          .from('calls')
-          .select('utm_source, utm_medium, utm_campaign, utm_content, call_type')
-
-        if (callsResult.error) throw callsResult.error
-
-        // Fetch distinct lead sources from leads table
-        const leadsResult = await supabase
-          .from('leads')
-          .select('lead_source')
-
-        if (leadsResult.error) throw leadsResult.error
-
-        // Extract unique values
-        const utmSources = [...new Set(callsResult.data?.map(c => c.utm_source).filter(Boolean) || [])]
-        const utmMediums = [...new Set(callsResult.data?.map(c => c.utm_medium).filter(Boolean) || [])]
-        const utmCampaigns = [...new Set(callsResult.data?.map(c => c.utm_campaign).filter(Boolean) || [])]
-        const utmContents = [...new Set(callsResult.data?.map(c => c.utm_content).filter(Boolean) || [])]
-        const callTypes = [...new Set(callsResult.data?.map(c => c.call_type).filter(Boolean) || [])]
-        const leadSources = [...new Set(leadsResult.data?.map(l => l.lead_source).filter(Boolean) || [])]
-
-        setOptions({
-          salesReps: salesRepsResult.data || [],
-          utmSources: utmSources.sort(),
-          utmMediums: utmMediums.sort(),
-          utmCampaigns: utmCampaigns.sort(),
-          utmContents: utmContents.sort(),
-          callTypes: callTypes.sort(),
-          leadSources: leadSources.sort(),
-        })
+        if (data) {
+          setOptions({
+            salesReps: data.salesReps || [],
+            utmSources: data.utmSources || [],
+            utmMediums: data.utmMediums || [],
+            utmCampaigns: data.utmCampaigns || [],
+            utmContents: data.utmContents || [],
+            callTypes: data.callTypes || [],
+            leadSources: data.leadSources || [],
+          })
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch dropdown options')
       } finally {
