@@ -207,10 +207,8 @@ export function AddCallModal({
                     ))
                   ) : (
                     <>
-                      <SelectItem value="discovery">Discovery</SelectItem>
-                      <SelectItem value="demo">Demo</SelectItem>
-                      <SelectItem value="follow_up">Follow Up</SelectItem>
-                      <SelectItem value="closing">Closing</SelectItem>
+                      <SelectItem value="first_call">First Call</SelectItem>
+                      <SelectItem value="second_call">Second Call</SelectItem>
                     </>
                   )}
                 </SelectContent>

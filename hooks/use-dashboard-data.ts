@@ -33,8 +33,8 @@ export interface Call {
   confirmation_status: "pending" | "yes" | "no" | "canceled"
   show_up_status: "pending" | "yes" | "no"
   call_outcome: "pending" | "disqualified" | "follow_up" | "closed_won" | "closed_lost"
-  quality_score: number
-  upfront_revenue: number
+  quality_score: number | null
+  upfront_revenue: number | null
   call_type: string
   utm_source: string
   utm_medium: string
@@ -204,8 +204,8 @@ async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQuery
     confirmation_status: (call.confirmation_status as Call['confirmation_status']) || 'pending',
     show_up_status: (call.show_up_status as Call['show_up_status']) || 'pending',
     call_outcome: (call.call_outcome as Call['call_outcome']) || 'pending',
-    quality_score: (call.quality_score as number) || 0,
-    upfront_revenue: (call.upfront_revenue as number) || 0,
+    quality_score: call.quality_score as number | null,
+    upfront_revenue: call.upfront_revenue as number | null,
     call_type: (call.call_type as string) || '',
     utm_source: (call.utm_source as string) || '',
     utm_medium: (call.utm_medium as string) || '',
@@ -264,8 +264,8 @@ async function fetchCalls(): Promise<Call[]> {
     confirmation_status: (call.confirmation_status as Call['confirmation_status']) || 'pending',
     show_up_status: (call.show_up_status as Call['show_up_status']) || 'pending',
     call_outcome: (call.call_outcome as Call['call_outcome']) || 'pending',
-    quality_score: (call.quality_score as number) || 0,
-    upfront_revenue: (call.upfront_revenue as number) || 0,
+    quality_score: call.quality_score as number | null,
+    upfront_revenue: call.upfront_revenue as number | null,
     call_type: (call.call_type as string) || '',
     utm_source: (call.utm_source as string) || '',
     utm_medium: (call.utm_medium as string) || '',
@@ -434,8 +434,8 @@ export type AddCallData = {
   confirmation_status: Call['confirmation_status']
   show_up_status: Call['show_up_status']
   call_outcome: Call['call_outcome']
-  quality_score: number
-  upfront_revenue: number
+  quality_score: number | null
+  upfront_revenue: number | null
   call_type: string
   utm_source: string
   utm_medium: string
@@ -574,6 +574,35 @@ export function useUpdateCall() {
             }
             if (updates.zoom_recording_url !== undefined) {
               updatedCall.zoom_recording_url = updates.zoom_recording_url
+            }
+            // New fields for inline editing
+            if (updates.booking_date !== undefined) {
+              updatedCall.booking_date = updates.booking_date
+            }
+            if (updates.call_date !== undefined) {
+              updatedCall.call_date = updates.call_date
+            }
+            if (updates.call_type !== undefined) {
+              updatedCall.call_type = updates.call_type
+            }
+            if (updates.utm_source !== undefined) {
+              updatedCall.utm_source = updates.utm_source
+            }
+            if (updates.utm_medium !== undefined) {
+              updatedCall.utm_medium = updates.utm_medium
+            }
+            if (updates.utm_campaign !== undefined) {
+              updatedCall.utm_campaign = updates.utm_campaign
+            }
+            if (updates.utm_content !== undefined) {
+              updatedCall.utm_content = updates.utm_content
+            }
+            // For lead_id, also update lead_name from cached leads
+            if (updates.lead_id !== undefined) {
+              updatedCall.lead_id = updates.lead_id
+              const leadsData = queryClient.getQueryData<Lead[]>(queryKeys.leads)
+              const lead = leadsData?.find(l => l.id === updates.lead_id)
+              if (lead) updatedCall.lead_name = lead.name
             }
             
             return updatedCall

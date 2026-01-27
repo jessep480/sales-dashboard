@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { AddCallModal, AddCallData } from "@/components/dashboard/add-call-modal"
 import { useCallsQuery, useLeads, useDropdownOptions, useAddCall, useUpdateCall } from "@/hooks/use-dashboard-data"
@@ -25,6 +25,62 @@ import {
 } from "@/components/ui/select"
 import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+
+// Inline edit input component with commit-on-blur pattern
+// Note: onCommit always receives a string; the caller is responsible for parsing
+function InlineEditInput({ 
+  value, 
+  onCommit, 
+  type = "text",
+  className = "",
+  disabled = false,
+  ...props 
+}: { 
+  value: string | number | null
+  onCommit: (value: string) => void
+  type?: "text" | "number" | "date"
+  className?: string
+  disabled?: boolean
+  min?: number
+  max?: number
+  step?: number
+  placeholder?: string
+}) {
+  const [localValue, setLocalValue] = useState(String(value ?? ""))
+  
+  // Sync external value changes
+  useEffect(() => {
+    setLocalValue(String(value ?? ""))
+  }, [value])
+  
+  const handleCommit = () => {
+    if (localValue !== String(value ?? "")) {
+      onCommit(localValue)
+    }
+  }
+  
+  return (
+    <Input
+      type={type}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleCommit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur()
+        }
+        if (e.key === "Escape") {
+          setLocalValue(String(value ?? ""))
+          e.currentTarget.blur()
+        }
+      }}
+      className={className}
+      disabled={disabled}
+      {...props}
+    />
+  )
+}
 
 const defaultFilters: Filters = {
   dateType: "booking_date",
@@ -93,7 +149,7 @@ export default function CallsPage() {
     })
   }
 
-  const handleUpdateCall = (id: string, field: string, value: string | number) => {
+  const handleUpdateCall = (id: string, field: string, value: string | number | null) => {
     // Handle sales_rep field - need to convert name to ID
     if (field === 'sales_rep') {
       const rep = options.salesReps.find(r => r.name === value)
@@ -103,12 +159,19 @@ export default function CallsPage() {
       if (rep) {
         updateCallMutation.mutate({ id, updates: { sales_rep_id: rep.id } })
       }
-    } else {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:handleUpdateCall',message:'update field',data:{field,value,page,sortKey,sortDirection,filters},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      updateCallMutation.mutate({ id, updates: { [field]: value } })
+      return
     }
+    
+    // Handle lead_id field directly
+    if (field === 'lead_id') {
+      updateCallMutation.mutate({ id, updates: { lead_id: value as string } })
+      return
+    }
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:handleUpdateCall',message:'update field',data:{field,value,page,sortKey,sortDirection,filters},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    updateCallMutation.mutate({ id, updates: { [field]: value } })
   }
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
@@ -122,7 +185,8 @@ export default function CallsPage() {
     </Button>
   )
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | null) => {
+    if (amount == null) return null
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
@@ -264,7 +328,24 @@ export default function CallsPage() {
                 {calls.map((call) => (
                   <TableRow key={call.id} className="border-border">
                     <TableCell className="font-mono text-xs text-muted-foreground">{call.id}</TableCell>
-                    <TableCell className="font-medium text-card-foreground">{call.lead_name}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={call.lead_id}
+                        onValueChange={(v) => handleUpdateCall(call.id, "lead_id", v)}
+                        disabled={saving}
+                      >
+                        <SelectTrigger className="h-8 w-36 bg-secondary">
+                          <SelectValue>{call.lead_name}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {leads.map((lead) => (
+                            <SelectItem key={lead.id} value={lead.id}>
+                              {lead.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell>
                       <Select
                         value={call.sales_rep}
@@ -283,8 +364,24 @@ export default function CallsPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-card-foreground">{call.booking_date}</TableCell>
-                    <TableCell className="text-card-foreground">{call.call_date}</TableCell>
+                    <TableCell>
+                      <InlineEditInput
+                        type="date"
+                        value={call.booking_date}
+                        onCommit={(v) => handleUpdateCall(call.id, "booking_date", v)}
+                        className="h-8 w-32 bg-secondary"
+                        disabled={saving}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <InlineEditInput
+                        type="date"
+                        value={call.call_date}
+                        onCommit={(v) => handleUpdateCall(call.id, "call_date", v)}
+                        className="h-8 w-32 bg-secondary"
+                        disabled={saving}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Select
                         value={call.booking_status}
@@ -351,7 +448,15 @@ export default function CallsPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-card-foreground">{call.close_date || "—"}</TableCell>
+                    <TableCell>
+                      <InlineEditInput
+                        type="date"
+                        value={call.close_date || ""}
+                        onCommit={(v) => handleUpdateCall(call.id, "close_date", v || null)}
+                        className="h-8 w-32 bg-secondary"
+                        disabled={saving}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Select
                         value={call.demo_type || ""}
@@ -367,27 +472,171 @@ export default function CallsPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-right text-card-foreground">{call.quality_score}</TableCell>
-                    <TableCell className="text-right text-chart-2">{formatCurrency(call.upfront_revenue)}</TableCell>
-                    <TableCell className="text-card-foreground capitalize">{call.call_type}</TableCell>
+                    <TableCell className="text-right">
+                      <InlineEditInput
+                        type="number"
+                        value={call.quality_score}
+                        onCommit={(v) => {
+                          const num = v === "" ? null : Math.min(5, Math.max(1, parseInt(v)))
+                          handleUpdateCall(call.id, "quality_score", num)
+                        }}
+                        min={1}
+                        max={5}
+                        className="h-8 w-16 bg-secondary text-right"
+                        disabled={saving}
+                        placeholder="—"
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <InlineEditInput
+                        type="number"
+                        value={call.upfront_revenue}
+                        onCommit={(v) => {
+                          const num = v === "" ? null : Math.max(0, parseFloat(v))
+                          handleUpdateCall(call.id, "upfront_revenue", num)
+                        }}
+                        min={0}
+                        step={100}
+                        className="h-8 w-24 bg-secondary text-right text-chart-2"
+                        disabled={saving}
+                        placeholder="—"
+                      />
+                    </TableCell>
                     <TableCell>
-                      {call.zoom_recording_url ? (
-                        <a 
-                          href={call.zoom_recording_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-400 underline"
+                      <Select
+                        value={call.call_type || ""}
+                        onValueChange={(v) => handleUpdateCall(call.id, "call_type", v)}
+                        disabled={saving}
+                      >
+                        <SelectTrigger className="h-8 w-28 bg-secondary">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.callTypes.length > 0 ? (
+                            options.callTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <>
+                              <SelectItem value="first_call">First Call</SelectItem>
+                              <SelectItem value="second_call">Second Call</SelectItem>
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <InlineEditInput
+                        type="text"
+                        value={call.zoom_recording_url || ""}
+                        onCommit={(v) => handleUpdateCall(call.id, "zoom_recording_url", v || null)}
+                        className="h-8 w-32 bg-secondary text-blue-500"
+                        disabled={saving}
+                        placeholder="URL..."
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {options.utmSources.length > 0 ? (
+                        <Select
+                          value={call.utm_source || ""}
+                          onValueChange={(v) => handleUpdateCall(call.id, "utm_source", v)}
+                          disabled={saving}
                         >
-                          View
-                        </a>
+                          <SelectTrigger className="h-8 w-28 bg-secondary">
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {options.utmSources.map((s) => (
+                              <SelectItem key={s} value={s}>{s}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <InlineEditInput
+                          value={call.utm_source || ""}
+                          onCommit={(v) => handleUpdateCall(call.id, "utm_source", v)}
+                          className="h-8 w-28 bg-secondary text-muted-foreground"
+                          disabled={saving}
+                        />
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{call.utm_source}</TableCell>
-                    <TableCell className="text-muted-foreground">{call.utm_medium}</TableCell>
-                    <TableCell className="text-muted-foreground">{call.utm_campaign}</TableCell>
-                    <TableCell className="text-muted-foreground">{call.utm_content}</TableCell>
+                    <TableCell>
+                      {options.utmMediums.length > 0 ? (
+                        <Select
+                          value={call.utm_medium || ""}
+                          onValueChange={(v) => handleUpdateCall(call.id, "utm_medium", v)}
+                          disabled={saving}
+                        >
+                          <SelectTrigger className="h-8 w-28 bg-secondary">
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {options.utmMediums.map((m) => (
+                              <SelectItem key={m} value={m}>{m}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <InlineEditInput
+                          value={call.utm_medium || ""}
+                          onCommit={(v) => handleUpdateCall(call.id, "utm_medium", v)}
+                          className="h-8 w-28 bg-secondary text-muted-foreground"
+                          disabled={saving}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {options.utmCampaigns.length > 0 ? (
+                        <Select
+                          value={call.utm_campaign || ""}
+                          onValueChange={(v) => handleUpdateCall(call.id, "utm_campaign", v)}
+                          disabled={saving}
+                        >
+                          <SelectTrigger className="h-8 w-28 bg-secondary">
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {options.utmCampaigns.map((c) => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <InlineEditInput
+                          value={call.utm_campaign || ""}
+                          onCommit={(v) => handleUpdateCall(call.id, "utm_campaign", v)}
+                          className="h-8 w-28 bg-secondary text-muted-foreground"
+                          disabled={saving}
+                        />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {options.utmContents.length > 0 ? (
+                        <Select
+                          value={call.utm_content || ""}
+                          onValueChange={(v) => handleUpdateCall(call.id, "utm_content", v)}
+                          disabled={saving}
+                        >
+                          <SelectTrigger className="h-8 w-28 bg-secondary">
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {options.utmContents.map((c) => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <InlineEditInput
+                          value={call.utm_content || ""}
+                          onCommit={(v) => handleUpdateCall(call.id, "utm_content", v)}
+                          className="h-8 w-28 bg-secondary text-muted-foreground"
+                          disabled={saving}
+                        />
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
