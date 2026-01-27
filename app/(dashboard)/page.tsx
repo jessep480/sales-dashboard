@@ -4,7 +4,8 @@ import { useState, useMemo } from "react"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { useFilteredCalls, useMetrics } from "@/hooks/use-filtered-calls"
-import { mockCalls, salesReps } from "@/lib/mock-data"
+import { useDashboardStats, useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
+import { mockCalls, salesReps as mockSalesReps } from "@/lib/mock-data"
 import type { Filters } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -41,7 +42,17 @@ const defaultFilters: Filters = {
 
 export default function DashboardPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters)
-  const filteredCalls = useFilteredCalls(mockCalls, filters)
+
+  // Fetch data from Supabase
+  const { stats, loading: statsLoading, error: statsError } = useDashboardStats()
+  const { calls: supabaseCalls, loading: callsLoading } = useCalls()
+  const { salesReps: supabaseSalesReps, loading: repsLoading } = useSalesReps()
+
+  // Use Supabase data if available, otherwise fall back to mock data
+  const calls = supabaseCalls.length > 0 ? supabaseCalls : mockCalls
+  const salesReps = supabaseSalesReps.length > 0 ? supabaseSalesReps : mockSalesReps
+
+  const filteredCalls = useFilteredCalls(calls, filters)
   const metrics = useMetrics(filteredCalls)
 
   const salesRepData = useMemo(() => {
@@ -78,9 +89,17 @@ export default function DashboardPage() {
     return `${value.toFixed(1)}%`
   }
 
+  const isLoading = statsLoading || callsLoading || repsLoading
+
   return (
     <div className="space-y-8">
       <FilterBar filters={filters} onFiltersChange={setFilters} />
+
+      {statsError && (
+        <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+          Error loading data: {statsError}. Showing mock data instead.
+        </div>
+      )}
 
       {/* Key Metrics Section */}
       <section className="rounded-xl bg-secondary/30 p-6">
