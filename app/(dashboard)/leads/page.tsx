@@ -36,12 +36,12 @@ export default function LeadsPage() {
   const { leads: supabaseLeads } = useLeads()
   const { calls: supabaseCalls } = useCalls()
 
-  const [localLeads, setLocalLeads] = useState<Lead[]>([])
   const [sortKey, setSortKey] = useState<SortKey>("name")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [expandedLeads, setExpandedLeads] = useState<Set<string>>(new Set())
 
-  const leads = localLeads.length > 0 ? localLeads : supabaseLeads
+  // Use Supabase data directly
+  const leads = supabaseLeads
   const calls = supabaseCalls
 
   const leadsWithCalls = useMemo(() => {
@@ -87,7 +87,8 @@ export default function LeadsPage() {
   }
 
   const handleAddLead = (newLead: Lead) => {
-    setLocalLeads([newLead, ...leads])
+    // TODO: Implement Supabase insert
+    console.log('Add lead:', newLead)
   }
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (

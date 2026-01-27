@@ -44,19 +44,12 @@ export default function CallsPage() {
   const { calls: supabaseCalls } = useCalls()
   const { salesReps } = useSalesReps()
 
-  const [localCalls, setLocalCalls] = useState<Call[]>([])
   const [filters, setFilters] = useState<Filters>(defaultFilters)
   const [sortKey, setSortKey] = useState<SortKey>("booking_date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
 
-  // Sync Supabase data to local state
-  useState(() => {
-    if (supabaseCalls.length > 0 && localCalls.length === 0) {
-      setLocalCalls(supabaseCalls)
-    }
-  })
-
-  const calls = localCalls.length > 0 ? localCalls : supabaseCalls
+  // Use Supabase data directly
+  const calls = supabaseCalls
   const filteredCalls = useFilteredCalls(calls, filters)
 
   const sortedCalls = useMemo(() => {
@@ -81,13 +74,13 @@ export default function CallsPage() {
   }
 
   const handleAddCall = (newCall: Call) => {
-    setLocalCalls([newCall, ...calls])
+    // TODO: Implement Supabase insert
+    console.log('Add call:', newCall)
   }
 
   const handleUpdateCall = (id: string, field: keyof Call, value: string | number) => {
-    setLocalCalls(
-      calls.map((call) => (call.id === id ? { ...call, [field]: value } : call))
-    )
+    // TODO: Implement Supabase update
+    console.log('Update call:', id, field, value)
   }
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
