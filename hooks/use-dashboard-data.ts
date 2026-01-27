@@ -95,6 +95,12 @@ export function useCalls() {
         if (salesRepsResult.error) throw salesRepsResult.error
         if (leadsResult.error) throw leadsResult.error
 
+        // Debug logging
+        console.log('SUPABASE DEBUG - Calls count:', callsResult.data?.length)
+        console.log('SUPABASE DEBUG - Sales reps count:', salesRepsResult.data?.length)
+        console.log('SUPABASE DEBUG - Leads count:', leadsResult.data?.length)
+        console.log('SUPABASE DEBUG - First call raw:', callsResult.data?.[0])
+
         // Create lookup maps for sales reps and leads
         const salesRepsMap = new Map<number, string>()
         salesRepsResult.data?.forEach((rep: any) => {
@@ -105,6 +111,8 @@ export function useCalls() {
         leadsResult.data?.forEach((lead: any) => {
           leadsMap.set(lead.id, lead.name)
         })
+
+        console.log('SUPABASE DEBUG - Sales reps map:', Object.fromEntries(salesRepsMap))
 
         // Transform data to match the expected Call interface
         const transformedCalls: Call[] = (callsResult.data || []).map((call: any) => ({
@@ -127,8 +135,12 @@ export function useCalls() {
           utm_content: call.utm_content || '',
         }))
 
+        console.log('SUPABASE DEBUG - First transformed call:', transformedCalls[0])
+        console.log('SUPABASE DEBUG - Total transformed calls:', transformedCalls.length)
+
         setCalls(transformedCalls)
       } catch (err) {
+        console.error('SUPABASE DEBUG - Error:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch calls')
       } finally {
         setLoading(false)
