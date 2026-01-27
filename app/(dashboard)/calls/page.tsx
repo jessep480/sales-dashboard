@@ -4,7 +4,7 @@ import { useState, useMemo } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { AddCallModal } from "@/components/dashboard/add-call-modal"
 import { useFilteredCalls } from "@/hooks/use-filtered-calls"
-import { mockCalls, salesReps } from "@/lib/mock-data"
+import { useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
 import type { Filters, Call } from "@/lib/types"
 import {
   Table,
@@ -27,8 +27,8 @@ import { Button } from "@/components/ui/button"
 
 const defaultFilters: Filters = {
   dateType: "booking_date",
-  startDate: "2025-01-01",
-  endDate: "2025-01-31",
+  startDate: "2026-01-01",
+  endDate: "2026-01-31",
   salesRep: "all",
   utmSource: "all",
   utmMedium: "all",
@@ -40,11 +40,23 @@ type SortKey = keyof Call
 type SortDirection = "asc" | "desc"
 
 export default function CallsPage() {
-  const [calls, setCalls] = useState<Call[]>(mockCalls)
+  // Fetch data from Supabase
+  const { calls: supabaseCalls } = useCalls()
+  const { salesReps } = useSalesReps()
+
+  const [localCalls, setLocalCalls] = useState<Call[]>([])
   const [filters, setFilters] = useState<Filters>(defaultFilters)
   const [sortKey, setSortKey] = useState<SortKey>("booking_date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
 
+  // Sync Supabase data to local state
+  useState(() => {
+    if (supabaseCalls.length > 0 && localCalls.length === 0) {
+      setLocalCalls(supabaseCalls)
+    }
+  })
+
+  const calls = localCalls.length > 0 ? localCalls : supabaseCalls
   const filteredCalls = useFilteredCalls(calls, filters)
 
   const sortedCalls = useMemo(() => {
@@ -69,11 +81,11 @@ export default function CallsPage() {
   }
 
   const handleAddCall = (newCall: Call) => {
-    setCalls([newCall, ...calls])
+    setLocalCalls([newCall, ...calls])
   }
 
   const handleUpdateCall = (id: string, field: keyof Call, value: string | number) => {
-    setCalls(
+    setLocalCalls(
       calls.map((call) => (call.id === id ? { ...call, [field]: value } : call))
     )
   }

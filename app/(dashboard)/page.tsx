@@ -30,8 +30,8 @@ import {
 
 const defaultFilters: Filters = {
   dateType: "booking_date",
-  startDate: "2025-01-01",
-  endDate: "2025-01-31",
+  startDate: "2026-01-01",
+  endDate: "2026-01-31",
   salesRep: "all",
   utmSource: "all",
   utmMedium: "all",

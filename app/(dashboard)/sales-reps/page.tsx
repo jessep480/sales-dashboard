@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { useFilteredCalls } from "@/hooks/use-filtered-calls"
-import { mockCalls, salesReps } from "@/lib/mock-data"
+import { useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
 import type { Filters, SalesRep } from "@/lib/types"
 import {
   Table,
@@ -19,8 +19,8 @@ import { Button } from "@/components/ui/button"
 
 const defaultFilters: Filters = {
   dateType: "booking_date",
-  startDate: "2025-01-01",
-  endDate: "2025-01-31",
+  startDate: "2026-01-01",
+  endDate: "2026-01-31",
   salesRep: "all",
   utmSource: "all",
   utmMedium: "all",
@@ -36,7 +36,11 @@ export default function SalesRepsPage() {
   const [sortKey, setSortKey] = useState<SortKey>("totalCalls")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
 
-  const filteredCalls = useFilteredCalls(mockCalls, { ...filters, salesRep: "all" })
+  // Fetch data from Supabase
+  const { calls: supabaseCalls } = useCalls()
+  const { salesReps } = useSalesReps()
+
+  const filteredCalls = useFilteredCalls(supabaseCalls, { ...filters, salesRep: "all" })
 
   const salesRepData = useMemo(() => {
     const data: SalesRep[] = salesReps.map((rep) => {

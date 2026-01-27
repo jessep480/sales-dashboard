@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { AddLeadModal } from "@/components/dashboard/add-lead-modal"
-import { mockLeads, mockCalls } from "@/lib/mock-data"
+import { useCalls, useLeads } from "@/hooks/use-dashboard-data"
 import type { Lead, Call } from "@/lib/types"
 import {
   Table,
@@ -32,11 +32,17 @@ interface LeadWithCalls extends Lead {
 }
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>(mockLeads)
-  const [calls] = useState<Call[]>(mockCalls)
+  // Fetch data from Supabase
+  const { leads: supabaseLeads } = useLeads()
+  const { calls: supabaseCalls } = useCalls()
+
+  const [localLeads, setLocalLeads] = useState<Lead[]>([])
   const [sortKey, setSortKey] = useState<SortKey>("name")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [expandedLeads, setExpandedLeads] = useState<Set<string>>(new Set())
+
+  const leads = localLeads.length > 0 ? localLeads : supabaseLeads
+  const calls = supabaseCalls
 
   const leadsWithCalls = useMemo(() => {
     const data: LeadWithCalls[] = leads.map((lead) => {
@@ -81,7 +87,7 @@ export default function LeadsPage() {
   }
 
   const handleAddLead = (newLead: Lead) => {
-    setLeads([newLead, ...leads])
+    setLocalLeads([newLead, ...leads])
   }
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
