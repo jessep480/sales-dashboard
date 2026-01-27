@@ -4,7 +4,21 @@ import { useState, useMemo } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { useFilteredCalls } from "@/hooks/use-filtered-calls"
 import { useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
-import type { Filters, SalesRep } from "@/lib/types"
+import type { Filters } from "@/lib/types"
+
+// Local type for sales rep data with computed metrics
+interface SalesRepMetrics {
+  name: string
+  totalCalls: number
+  callsExclCanceled: number
+  canceledCalls: number
+  confirmedCalls: number
+  showUps: number
+  totalRevenue: number
+  cancellationRate: number
+  confirmationRate: number
+  showUpRate: number
+}
 import {
   Table,
   TableBody,
@@ -28,7 +42,7 @@ const defaultFilters: Filters = {
   utmContent: "all",
 }
 
-type SortKey = keyof SalesRep
+type SortKey = keyof SalesRepMetrics
 type SortDirection = "asc" | "desc"
 
 export default function SalesRepsPage() {
@@ -43,8 +57,8 @@ export default function SalesRepsPage() {
   const filteredCalls = useFilteredCalls(supabaseCalls, { ...filters, salesRep: "all" })
 
   const salesRepData = useMemo(() => {
-    const data: SalesRep[] = salesReps.map((rep) => {
-      const repCalls = filteredCalls.filter((c) => c.sales_rep === rep)
+    const data: SalesRepMetrics[] = salesReps.map((rep) => {
+      const repCalls = filteredCalls.filter((c) => c.sales_rep === rep.name)
       const totalCalls = repCalls.length
       const canceledCalls = repCalls.filter((c) => c.booking_status === "canceled").length
       const callsExclCanceled = totalCalls - canceledCalls
@@ -53,7 +67,7 @@ export default function SalesRepsPage() {
       const totalRevenue = repCalls.reduce((sum, c) => sum + c.upfront_revenue, 0)
 
       return {
-        name: rep,
+        name: rep.name,
         totalCalls,
         callsExclCanceled,
         canceledCalls,

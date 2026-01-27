@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo } from "react"
 import { AddLeadModal, AddLeadData } from "@/components/dashboard/add-lead-modal"
-import { useCalls, useLeads, useDropdownOptions, addLead } from "@/hooks/use-dashboard-data"
+import { useCalls, useLeads, useDropdownOptions, useAddLead } from "@/hooks/use-dashboard-data"
 import { parseDbError } from "@/lib/utils"
 import type { Lead, Call } from "@/hooks/use-dashboard-data"
 import {
@@ -38,11 +38,16 @@ export default function LeadsPage() {
   const { calls: supabaseCalls, loading: callsLoading } = useCalls()
   const { options, loading: optionsLoading } = useDropdownOptions()
 
+  // Mutations
+  const addLeadMutation = useAddLead()
+
   const [sortKey, setSortKey] = useState<SortKey>("name")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [expandedLeads, setExpandedLeads] = useState<Set<string>>(new Set())
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Mutation states
+  const saving = addLeadMutation.isPending
+  const saveError = addLeadMutation.error
 
   // Use Supabase data directly
   const leads = supabaseLeads
@@ -90,19 +95,9 @@ export default function LeadsPage() {
     setExpandedLeads(newExpanded)
   }
 
-  const handleAddLead = useCallback(async (leadData: AddLeadData) => {
-    setSaving(true)
-    setSaveError(null)
-    try {
-      await addLead(leadData)
-      // Refresh the page to show new data
-      window.location.reload()
-    } catch (err) {
-      setSaveError(parseDbError(err))
-    } finally {
-      setSaving(false)
-    }
-  }, [])
+  const handleAddLead = (leadData: AddLeadData) => {
+    addLeadMutation.mutate(leadData)
+  }
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
     <Button
@@ -142,7 +137,7 @@ export default function LeadsPage() {
     <div className="space-y-6">
       {saveError && (
         <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
-          Error: {saveError}
+          Error: {parseDbError(saveError)}
         </div>
       )}
       

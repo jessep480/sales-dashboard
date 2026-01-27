@@ -21,25 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus } from "lucide-react"
-import type { Lead, SalesRep } from "@/hooks/use-dashboard-data"
+import type { Lead, SalesRep, AddCallData } from "@/hooks/use-dashboard-data"
 
-export interface AddCallData {
-  lead_id: string
-  sales_rep_id: number
-  booking_date: string
-  call_date: string
-  booking_status: string
-  confirmation_status: string
-  show_up_status: string
-  call_outcome: string
-  quality_score: number
-  upfront_revenue: number
-  call_type: string
-  utm_source: string
-  utm_medium: string
-  utm_campaign: string
-  utm_content: string
-}
+export type { AddCallData }
 
 interface AddCallModalProps {
   onAdd: (callData: AddCallData) => void
@@ -91,10 +75,10 @@ export function AddCallModal({
       sales_rep_id: parseInt(formData.sales_rep_id),
       booking_date: formData.booking_date,
       call_date: formData.call_date,
-      booking_status: formData.booking_status,
-      confirmation_status: formData.confirmation_status,
-      show_up_status: formData.show_up_status,
-      call_outcome: formData.call_outcome,
+      booking_status: formData.booking_status as AddCallData['booking_status'],
+      confirmation_status: formData.confirmation_status as AddCallData['confirmation_status'],
+      show_up_status: formData.show_up_status as AddCallData['show_up_status'],
+      call_outcome: formData.call_outcome as AddCallData['call_outcome'],
       quality_score: parseInt(formData.quality_score),
       upfront_revenue: parseFloat(formData.upfront_revenue),
       call_type: formData.call_type,

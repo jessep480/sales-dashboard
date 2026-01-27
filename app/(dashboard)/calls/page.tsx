@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { AddCallModal, AddCallData } from "@/components/dashboard/add-call-modal"
-import { useFilteredCalls } from "@/hooks/use-filtered-calls"
-import { useCalls, useLeads, useDropdownOptions, addCall, updateCall } from "@/hooks/use-dashboard-data"
+import { useCallsQuery, useLeads, useDropdownOptions, useAddCall, useUpdateCall } from "@/hooks/use-dashboard-data"
 import { parseDbError } from "@/lib/utils"
 import type { Filters } from "@/lib/types"
 import type { Call } from "@/hooks/use-dashboard-data"
@@ -24,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowUpDown } from "lucide-react"
+import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const defaultFilters: Filters = {
@@ -38,36 +37,45 @@ const defaultFilters: Filters = {
   utmContent: "all",
 }
 
+const PAGE_SIZE = 50
+
 type SortKey = keyof Call
 type SortDirection = "asc" | "desc"
 
 export default function CallsPage() {
-  // Fetch data from Supabase
-  const { calls: supabaseCalls, loading: callsLoading, error: callsError } = useCalls()
-  const { leads, loading: leadsLoading } = useLeads()
-  const { options, loading: optionsLoading } = useDropdownOptions()
-
+  // UI state
   const [filters, setFilters] = useState<Filters>(defaultFilters)
   const [sortKey, setSortKey] = useState<SortKey>("booking_date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
-  // Use Supabase data directly
-  const calls = supabaseCalls
-  const filteredCalls = useFilteredCalls(calls, filters)
+  // Fetch data with server-side filtering, sorting, and pagination
+  const { data: callsData, loading: callsLoading, isFetching, error: callsError } = useCallsQuery({
+    filters,
+    sortKey,
+    sortDirection,
+    page,
+    pageSize: PAGE_SIZE,
+  })
+  const { leads, loading: leadsLoading } = useLeads()
+  const { options, loading: optionsLoading } = useDropdownOptions()
 
-  const sortedCalls = useMemo(() => {
-    return [...filteredCalls].sort((a, b) => {
-      const aVal = a[sortKey]
-      const bVal = b[sortKey]
-      const modifier = sortDirection === "asc" ? 1 : -1
-      if (typeof aVal === "string" && typeof bVal === "string") {
-        return aVal.localeCompare(bVal) * modifier
-      }
-      return ((aVal as number) - (bVal as number)) * modifier
-    })
-  }, [filteredCalls, sortKey, sortDirection])
+  // Mutations
+  const addCallMutation = useAddCall()
+  const updateCallMutation = useUpdateCall()
+
+  // Mutation states
+  const saving = addCallMutation.isPending || updateCallMutation.isPending
+  const saveError = addCallMutation.error || updateCallMutation.error
+
+  // Reset page when filters change
+  const handleFiltersChange = (newFilters: Filters) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:handleFiltersChange',message:'filters change',data:{prevFilters:filters,nextFilters:newFilters,prevPage:page},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    setFilters(newFilters)
+    setPage(0) // Reset to first page when filters change
+  }
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -76,43 +84,32 @@ export default function CallsPage() {
       setSortKey(key)
       setSortDirection("desc")
     }
+    setPage(0) // Reset to first page when sort changes
   }
 
-  const handleAddCall = useCallback(async (callData: AddCallData) => {
-    setSaving(true)
-    setSaveError(null)
-    try {
-      await addCall(callData)
-      // Refresh the page to show new data
-      window.location.reload()
-    } catch (err) {
-      setSaveError(parseDbError(err))
-    } finally {
-      setSaving(false)
-    }
-  }, [])
+  const handleAddCall = (callData: AddCallData) => {
+    addCallMutation.mutate(callData, {
+      onSuccess: () => setPage(0), // Go to first page to see new call
+    })
+  }
 
-  const handleUpdateCall = useCallback(async (id: string, field: string, value: string | number) => {
-    setSaving(true)
-    setSaveError(null)
-    try {
-      // Handle sales_rep field - need to convert name to ID
-      if (field === 'sales_rep') {
-        const rep = options.salesReps.find(r => r.name === value)
-        if (rep) {
-          await updateCall(id, { sales_rep_id: rep.id })
-        }
-      } else {
-        await updateCall(id, { [field]: value })
+  const handleUpdateCall = (id: string, field: string, value: string | number) => {
+    // Handle sales_rep field - need to convert name to ID
+    if (field === 'sales_rep') {
+      const rep = options.salesReps.find(r => r.name === value)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'calls/page.tsx:handleUpdateCall',message:'update sales_rep',data:{field,value,repFound:Boolean(rep),page,sortKey,sortDirection,filters},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      if (rep) {
+        updateCallMutation.mutate({ id, updates: { sales_rep_id: rep.id } })
       }
-      // Refresh the page to show updated data
-      window.location.reload()
-    } catch (err) {
-      setSaveError(parseDbError(err))
-    } finally {
-      setSaving(false)
+    } else {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:handleUpdateCall',message:'update field',data:{field,value,page,sortKey,sortDirection,filters},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      updateCallMutation.mutate({ id, updates: { [field]: value } })
     }
-  }, [options.salesReps])
+  }
 
   const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
     <Button
@@ -135,11 +132,20 @@ export default function CallsPage() {
 
   const isLoading = callsLoading || leadsLoading || optionsLoading
 
+  // Pagination helpers
+  const { rows: calls, totalCount, totalPages } = callsData
+  const canGoBack = page > 0
+  const canGoForward = page < totalPages - 1
+
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:render',message:'render state',data:{filters,sortKey,sortDirection,page,totalCount,totalPages,isLoading,isFetching},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+
   return (
     <div className="space-y-6">
       {saveError && (
         <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
-          Error: {saveError}
+          Error: {parseDbError(saveError)}
         </div>
       )}
       
@@ -152,7 +158,7 @@ export default function CallsPage() {
       <div className="flex items-center justify-between">
         <FilterBar 
           filters={filters} 
-          onFiltersChange={setFilters}
+          onFiltersChange={handleFiltersChange}
           salesReps={options.salesReps}
           utmSources={options.utmSources}
           utmMediums={options.utmMediums}
@@ -174,10 +180,59 @@ export default function CallsPage() {
 
       <Card className="border-border bg-card">
         <CardHeader>
-          <CardTitle className="text-card-foreground">
-            All Calls ({sortedCalls.length})
-            {isLoading && <span className="ml-2 text-sm text-muted-foreground">Loading...</span>}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-card-foreground">
+              All Calls ({totalCount})
+              {(isLoading || isFetching) && (
+                <Loader2 className="ml-2 h-4 w-4 animate-spin inline" />
+              )}
+            </CardTitle>
+            
+            {/* Pagination Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Page {page + 1} of {Math.max(1, totalPages)}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(0)}
+                  disabled={!canGoBack || isFetching}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={!canGoBack || isFetching}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={!canGoForward || isFetching}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(totalPages - 1)}
+                  disabled={!canGoForward || isFetching}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -203,7 +258,7 @@ export default function CallsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedCalls.map((call) => (
+                {calls.map((call) => (
                   <TableRow key={call.id} className="border-border">
                     <TableCell className="font-mono text-xs text-muted-foreground">{call.id}</TableCell>
                     <TableCell className="font-medium text-card-foreground">{call.lead_name}</TableCell>
@@ -303,6 +358,35 @@ export default function CallsPage() {
               </TableBody>
             </Table>
           </div>
+          
+          {/* Bottom pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+              <span className="text-sm text-muted-foreground">
+                Showing {page * PAGE_SIZE + 1} to {Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount} calls
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={!canGoBack || isFetching}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={!canGoForward || isFetching}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
