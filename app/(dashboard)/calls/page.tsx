@@ -248,9 +248,12 @@ export default function CallsPage() {
                   <TableHead>Confirmation</TableHead>
                   <TableHead>Show Up</TableHead>
                   <TableHead>Outcome</TableHead>
+                  <TableHead><SortableHeader column="close_date" label="Close Date" /></TableHead>
+                  <TableHead>Demo Type</TableHead>
                   <TableHead className="text-right"><SortableHeader column="quality_score" label="Quality" /></TableHead>
                   <TableHead className="text-right"><SortableHeader column="upfront_revenue" label="Revenue" /></TableHead>
                   <TableHead><SortableHeader column="call_type" label="Type" /></TableHead>
+                  <TableHead>Recording</TableHead>
                   <TableHead><SortableHeader column="utm_source" label="Source" /></TableHead>
                   <TableHead><SortableHeader column="utm_medium" label="Medium" /></TableHead>
                   <TableHead><SortableHeader column="utm_campaign" label="Campaign" /></TableHead>
@@ -310,6 +313,7 @@ export default function CallsPage() {
                           <SelectItem value="pending">Pending</SelectItem>
                           <SelectItem value="yes">Yes</SelectItem>
                           <SelectItem value="no">No</SelectItem>
+                          <SelectItem value="canceled">Canceled</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -340,15 +344,46 @@ export default function CallsPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="disqualified">Disqualified</SelectItem>
+                          <SelectItem value="follow_up">Follow Up</SelectItem>
                           <SelectItem value="closed_won">Closed Won</SelectItem>
                           <SelectItem value="closed_lost">Closed Lost</SelectItem>
-                          <SelectItem value="no_show">No Show</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-card-foreground">{call.close_date || "—"}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={call.demo_type || ""}
+                        onValueChange={(v) => handleUpdateCall(call.id, "demo_type", v)}
+                        disabled={saving}
+                      >
+                        <SelectTrigger className="h-8 w-44 bg-secondary">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="marketing_system_demo">Marketing System</SelectItem>
+                          <SelectItem value="inbound_leads_demo">Inbound Leads</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
                     <TableCell className="text-right text-card-foreground">{call.quality_score}</TableCell>
                     <TableCell className="text-right text-chart-2">{formatCurrency(call.upfront_revenue)}</TableCell>
                     <TableCell className="text-card-foreground capitalize">{call.call_type}</TableCell>
+                    <TableCell>
+                      {call.zoom_recording_url ? (
+                        <a 
+                          href={call.zoom_recording_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:text-blue-400 underline"
+                        >
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{call.utm_source}</TableCell>
                     <TableCell className="text-muted-foreground">{call.utm_medium}</TableCell>
                     <TableCell className="text-muted-foreground">{call.utm_campaign}</TableCell>

@@ -6,6 +6,10 @@ export interface Lead {
   lead_source: string
   hubspot_id: string
   created_at: string
+  utm_source: string | null
+  utm_medium: string | null
+  utm_campaign: string | null
+  utm_content: string | null
 }
 
 export interface Call {
@@ -16,9 +20,9 @@ export interface Call {
   booking_date: string
   call_date: string
   booking_status: "scheduled" | "canceled"
-  confirmation_status: "pending" | "yes" | "no"
+  confirmation_status: "pending" | "yes" | "no" | "canceled"
   show_up_status: "pending" | "yes" | "no"
-  call_outcome: "pending" | "closed_won" | "closed_lost" | "no_show"
+  call_outcome: "pending" | "disqualified" | "follow_up" | "closed_won" | "closed_lost"
   quality_score: number
   upfront_revenue: number
   call_type: string
@@ -26,6 +30,9 @@ export interface Call {
   utm_medium: string
   utm_campaign: string
   utm_content: string
+  close_date: string | null
+  demo_type: "marketing_system_demo" | "inbound_leads_demo" | null
+  zoom_recording_url: string | null
 }
 
 export interface SalesRep {

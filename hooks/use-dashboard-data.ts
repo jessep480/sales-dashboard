@@ -30,9 +30,9 @@ export interface Call {
   booking_date: string
   call_date: string
   booking_status: "scheduled" | "canceled"
-  confirmation_status: "pending" | "yes" | "no"
+  confirmation_status: "pending" | "yes" | "no" | "canceled"
   show_up_status: "pending" | "yes" | "no"
-  call_outcome: "pending" | "closed_won" | "closed_lost" | "no_show"
+  call_outcome: "pending" | "disqualified" | "follow_up" | "closed_won" | "closed_lost"
   quality_score: number
   upfront_revenue: number
   call_type: string
@@ -40,6 +40,9 @@ export interface Call {
   utm_medium: string
   utm_campaign: string
   utm_content: string
+  close_date: string | null
+  demo_type: "marketing_system_demo" | "inbound_leads_demo" | null
+  zoom_recording_url: string | null
 }
 
 export interface Lead {
@@ -50,6 +53,10 @@ export interface Lead {
   lead_source: string
   hubspot_id: string
   created_at: string
+  utm_source: string | null
+  utm_medium: string | null
+  utm_campaign: string | null
+  utm_content: string | null
 }
 
 export interface SalesRep {
@@ -204,6 +211,9 @@ async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQuery
     utm_medium: (call.utm_medium as string) || '',
     utm_campaign: (call.utm_campaign as string) || '',
     utm_content: (call.utm_content as string) || '',
+    close_date: (call.close_date as string) || null,
+    demo_type: (call.demo_type as Call['demo_type']) || null,
+    zoom_recording_url: (call.zoom_recording_url as string) || null,
   }))
 
   const totalCount = count ?? 0
@@ -261,6 +271,9 @@ async function fetchCalls(): Promise<Call[]> {
     utm_medium: (call.utm_medium as string) || '',
     utm_campaign: (call.utm_campaign as string) || '',
     utm_content: (call.utm_content as string) || '',
+    close_date: (call.close_date as string) || null,
+    demo_type: (call.demo_type as Call['demo_type']) || null,
+    zoom_recording_url: (call.zoom_recording_url as string) || null,
   }))
 }
 
@@ -428,6 +441,9 @@ export type AddCallData = {
   utm_medium: string
   utm_campaign: string
   utm_content: string
+  close_date?: string | null
+  demo_type?: Call['demo_type']
+  zoom_recording_url?: string | null
 }
 
 export type UpdateCallData = Partial<AddCallData>
@@ -549,6 +565,15 @@ export function useUpdateCall() {
               updatedCall.sales_rep_id = updates.sales_rep_id
               // Note: We can't update the sales_rep name optimistically without the lookup
               // The refetch in onSettled will fix this
+            }
+            if (updates.close_date !== undefined) {
+              updatedCall.close_date = updates.close_date
+            }
+            if (updates.demo_type !== undefined) {
+              updatedCall.demo_type = updates.demo_type
+            }
+            if (updates.zoom_recording_url !== undefined) {
+              updatedCall.zoom_recording_url = updates.zoom_recording_url
             }
             
             return updatedCall

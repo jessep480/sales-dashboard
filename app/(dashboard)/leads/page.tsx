@@ -23,7 +23,7 @@ import { ArrowUpDown, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
-type SortKey = "name" | "email" | "phone" | "lead_source" | "hubspot_id" | "callCount" | "lastCallDate"
+type SortKey = "name" | "email" | "phone" | "lead_source" | "hubspot_id" | "callCount" | "lastCallDate" | "utm_source" | "utm_medium" | "utm_campaign" | "utm_content"
 type SortDirection = "asc" | "desc"
 
 interface LeadWithCalls extends Lead {
@@ -116,8 +116,10 @@ export default function LeadsPage() {
         return <Badge className="bg-chart-2/20 text-chart-2 hover:bg-chart-2/30">Won</Badge>
       case "closed_lost":
         return <Badge className="bg-destructive/20 text-destructive hover:bg-destructive/30">Lost</Badge>
-      case "no_show":
-        return <Badge className="bg-chart-3/20 text-chart-3 hover:bg-chart-3/30">No Show</Badge>
+      case "disqualified":
+        return <Badge className="bg-orange-500/20 text-orange-500 hover:bg-orange-500/30">Disqualified</Badge>
+      case "follow_up":
+        return <Badge className="bg-blue-500/20 text-blue-500 hover:bg-blue-500/30">Follow Up</Badge>
       default:
         return <Badge variant="secondary">Pending</Badge>
     }
@@ -175,6 +177,10 @@ export default function LeadsPage() {
                   <TableHead><SortableHeader column="hubspot_id" label="HubSpot ID" /></TableHead>
                   <TableHead className="text-right"><SortableHeader column="callCount" label="Call Count" /></TableHead>
                   <TableHead><SortableHeader column="lastCallDate" label="Last Call Date" /></TableHead>
+                  <TableHead><SortableHeader column="utm_source" label="UTM Source" /></TableHead>
+                  <TableHead><SortableHeader column="utm_medium" label="UTM Medium" /></TableHead>
+                  <TableHead><SortableHeader column="utm_campaign" label="UTM Campaign" /></TableHead>
+                  <TableHead><SortableHeader column="utm_content" label="UTM Content" /></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -202,13 +208,17 @@ export default function LeadsPage() {
                           <TableCell className="font-mono text-xs text-muted-foreground">{lead.hubspot_id}</TableCell>
                           <TableCell className="text-right text-chart-1 font-medium">{lead.callCount}</TableCell>
                           <TableCell className="text-card-foreground">{lead.lastCallDate}</TableCell>
+                          <TableCell className="text-muted-foreground">{lead.utm_source || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{lead.utm_medium || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{lead.utm_campaign || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{lead.utm_content || "—"}</TableCell>
                         </TableRow>
                       </CollapsibleTrigger>
                       <CollapsibleContent asChild>
                         <>
                           {expandedLeads.has(lead.id) && lead.calls.length > 0 && (
                             <TableRow className="bg-secondary/30 hover:bg-secondary/30">
-                              <TableCell colSpan={8} className="p-0">
+                              <TableCell colSpan={12} className="p-0">
                                 <div className="p-4">
                                   <h4 className="text-sm font-medium text-card-foreground mb-3">
                                     Call History ({lead.calls.length} calls)
