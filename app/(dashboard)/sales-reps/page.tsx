@@ -64,7 +64,7 @@ export default function SalesRepsPage() {
       const callsExclCanceled = totalCalls - canceledCalls
       const confirmedCalls = repCalls.filter((c) => c.confirmation_status === "yes").length
       const showUps = repCalls.filter((c) => c.show_up_status === "yes").length
-      const totalRevenue = repCalls.reduce((sum, c) => sum + c.upfront_revenue, 0)
+      const totalRevenue = repCalls.reduce((sum, c) => sum + (c.upfront_revenue ?? 0), 0)
 
       return {
         name: rep.name,

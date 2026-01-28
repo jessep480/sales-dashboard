@@ -3,13 +3,12 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Users, Phone, UserCircle } from "lucide-react"
+import { LayoutDashboard, Users, Phone } from "lucide-react"
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/sales-reps", label: "Sales Reps", icon: Users },
   { href: "/calls", label: "Calls", icon: Phone },
-  { href: "/leads", label: "Leads", icon: UserCircle },
 ]
 
 export function Sidebar() {

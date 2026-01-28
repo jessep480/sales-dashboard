@@ -1,21 +1,9 @@
-export interface Lead {
-  id: string
-  name: string
-  email: string
-  phone: string
-  lead_source: string
-  hubspot_id: string
-  created_at: string
-  utm_source: string | null
-  utm_medium: string | null
-  utm_campaign: string | null
-  utm_content: string | null
-}
-
 export interface Call {
   id: string
-  lead_id: string
   lead_name: string
+  lead_email: string | null
+  lead_phone: string | null
+  hubspot_contact_url: string | null
   sales_rep: string
   booking_date: string
   call_date: string

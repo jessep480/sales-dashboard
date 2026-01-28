@@ -21,13 +21,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus } from "lucide-react"
-import type { Lead, SalesRep, AddCallData } from "@/hooks/use-dashboard-data"
+import type { SalesRep, AddCallData } from "@/hooks/use-dashboard-data"
+import { normalizeHttpUrl } from "@/lib/utils"
 
 export type { AddCallData }
 
 interface AddCallModalProps {
   onAdd: (callData: AddCallData) => void
-  leads: Lead[]
   salesReps: SalesRep[]
   callTypes?: string[]
   utmSources?: string[]
@@ -39,7 +39,6 @@ interface AddCallModalProps {
 
 export function AddCallModal({ 
   onAdd, 
-  leads = [],
   salesReps = [],
   callTypes = [],
   utmSources = [],
@@ -49,8 +48,18 @@ export function AddCallModal({
   loading = false,
 }: AddCallModalProps) {
   const [open, setOpen] = useState(false)
+  const [errors, setErrors] = useState<{
+    lead_name?: string
+    sales_rep_id?: string
+    hubspot_contact_url?: string
+    quality_score?: string
+    upfront_revenue?: string
+  }>({})
   const [formData, setFormData] = useState({
-    lead_id: "",
+    lead_name: "",
+    lead_email: "",
+    lead_phone: "",
+    hubspot_contact_url: "",
     sales_rep_id: "",
     booking_date: "",
     call_date: "",
@@ -69,18 +78,56 @@ export function AddCallModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
+    const nextErrors: typeof errors = {}
+    const trimmedLeadName = formData.lead_name.trim()
+    if (!trimmedLeadName) {
+      nextErrors.lead_name = "Lead name is required."
+    }
+
+    const salesRepId = formData.sales_rep_id ? parseInt(formData.sales_rep_id, 10) : NaN
+    if (!Number.isFinite(salesRepId)) {
+      nextErrors.sales_rep_id = "Select a sales rep."
+    }
+
+    const normalizedHubspotUrl = normalizeHttpUrl(formData.hubspot_contact_url)
+    if (formData.hubspot_contact_url.trim() && !normalizedHubspotUrl) {
+      nextErrors.hubspot_contact_url = "Enter a valid http(s) URL."
+    }
+
+    const qualityScoreValue = formData.quality_score.trim()
+    const parsedQuality = qualityScoreValue ? parseInt(qualityScoreValue, 10) : null
+    if (qualityScoreValue && (parsedQuality === null || Number.isNaN(parsedQuality) || parsedQuality < 1 || parsedQuality > 5)) {
+      nextErrors.quality_score = "Quality must be between 1 and 5."
+    }
+
+    const revenueValue = formData.upfront_revenue.trim()
+    const parsedRevenue = revenueValue ? parseFloat(revenueValue) : null
+    if (revenueValue && (parsedRevenue === null || Number.isNaN(parsedRevenue) || parsedRevenue < 0)) {
+      nextErrors.upfront_revenue = "Revenue must be 0 or higher."
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors)
+      return
+    }
+
+    setErrors({})
+
     const callData: AddCallData = {
-      lead_id: formData.lead_id,
-      sales_rep_id: parseInt(formData.sales_rep_id),
+      lead_name: trimmedLeadName,
+      lead_email: formData.lead_email || null,
+      lead_phone: formData.lead_phone || null,
+      hubspot_contact_url: normalizedHubspotUrl,
+      sales_rep_id: salesRepId,
       booking_date: formData.booking_date,
       call_date: formData.call_date,
       booking_status: formData.booking_status as AddCallData['booking_status'],
       confirmation_status: formData.confirmation_status as AddCallData['confirmation_status'],
       show_up_status: formData.show_up_status as AddCallData['show_up_status'],
       call_outcome: formData.call_outcome as AddCallData['call_outcome'],
-      quality_score: parseInt(formData.quality_score),
-      upfront_revenue: parseFloat(formData.upfront_revenue),
+      quality_score: parsedQuality,
+      upfront_revenue: parsedRevenue,
       call_type: formData.call_type,
       utm_source: formData.utm_source,
       utm_medium: formData.utm_medium,
@@ -91,7 +138,10 @@ export function AddCallModal({
     onAdd(callData)
     setOpen(false)
     setFormData({
-      lead_id: "",
+      lead_name: "",
+      lead_email: "",
+      lead_phone: "",
+      hubspot_contact_url: "",
       sales_rep_id: "",
       booking_date: "",
       call_date: "",
@@ -122,24 +172,57 @@ export function AddCallModal({
           <DialogTitle>Add New Call</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          {/* Lead Info Section */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Lead</Label>
-              <Select value={formData.lead_id} onValueChange={(v) => setFormData({ ...formData, lead_id: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select lead" />
-                </SelectTrigger>
-                <SelectContent>
-                  {leads.map((lead) => (
-                    <SelectItem key={lead.id} value={lead.id}>
-                      {lead.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Lead Name *</Label>
+              <Input
+                value={formData.lead_name}
+                onChange={(e) => setFormData({ ...formData, lead_name: e.target.value })}
+                placeholder="John Smith"
+                required
+              />
+              {errors.lead_name && (
+                <p className="text-xs text-destructive">{errors.lead_name}</p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label>Sales Rep</Label>
+              <Label>Lead Email</Label>
+              <Input
+                type="email"
+                value={formData.lead_email}
+                onChange={(e) => setFormData({ ...formData, lead_email: e.target.value })}
+                placeholder="john@example.com"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Lead Phone</Label>
+              <Input
+                value={formData.lead_phone}
+                onChange={(e) => setFormData({ ...formData, lead_phone: e.target.value })}
+                placeholder="(555) 123-4567"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>HubSpot Contact URL</Label>
+              <Input
+                type="url"
+                value={formData.hubspot_contact_url}
+                onChange={(e) => setFormData({ ...formData, hubspot_contact_url: e.target.value })}
+                placeholder="https://app.hubspot.com/contacts/..."
+              />
+              {errors.hubspot_contact_url && (
+                <p className="text-xs text-destructive">{errors.hubspot_contact_url}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Sales Rep *</Label>
               <Select value={formData.sales_rep_id} onValueChange={(v) => setFormData({ ...formData, sales_rep_id: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select rep" />
@@ -152,45 +235,9 @@ export function AddCallModal({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Booking Date</Label>
-              <Input
-                type="date"
-                value={formData.booking_date}
-                onChange={(e) => setFormData({ ...formData, booking_date: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Call Date</Label>
-              <Input
-                type="date"
-                value={formData.call_date}
-                onChange={(e) => setFormData({ ...formData, call_date: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Booking Status</Label>
-              <Select
-                value={formData.booking_status}
-                onValueChange={(v) => setFormData({ ...formData, booking_status: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                  <SelectItem value="canceled">Canceled</SelectItem>
-                </SelectContent>
-              </Select>
+              {errors.sales_rep_id && (
+                <p className="text-xs text-destructive">{errors.sales_rep_id}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Call Type</Label>
@@ -218,6 +265,42 @@ export function AddCallModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label>Booking Date *</Label>
+              <Input
+                type="date"
+                value={formData.booking_date}
+                onChange={(e) => setFormData({ ...formData, booking_date: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Call Date *</Label>
+              <Input
+                type="date"
+                value={formData.call_date}
+                onChange={(e) => setFormData({ ...formData, call_date: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Booking Status</Label>
+              <Select
+                value={formData.booking_status}
+                onValueChange={(v) => setFormData({ ...formData, booking_status: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="canceled">Canceled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Quality Score (1-5)</Label>
               <Input
                 type="number"
@@ -226,7 +309,13 @@ export function AddCallModal({
                 value={formData.quality_score}
                 onChange={(e) => setFormData({ ...formData, quality_score: e.target.value })}
               />
+              {errors.quality_score && (
+                <p className="text-xs text-destructive">{errors.quality_score}</p>
+              )}
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Upfront Revenue</Label>
               <Input
@@ -235,6 +324,9 @@ export function AddCallModal({
                 value={formData.upfront_revenue}
                 onChange={(e) => setFormData({ ...formData, upfront_revenue: e.target.value })}
               />
+              {errors.upfront_revenue && (
+                <p className="text-xs text-destructive">{errors.upfront_revenue}</p>
+              )}
             </div>
           </div>
 

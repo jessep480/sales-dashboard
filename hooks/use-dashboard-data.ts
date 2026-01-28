@@ -23,8 +23,10 @@ export interface DashboardStats {
 
 export interface Call {
   id: string
-  lead_id: string
   lead_name: string
+  lead_email: string | null
+  lead_phone: string | null
+  hubspot_contact_url: string | null
   sales_rep: string
   sales_rep_id?: number
   booking_date: string
@@ -45,20 +47,6 @@ export interface Call {
   zoom_recording_url: string | null
 }
 
-export interface Lead {
-  id: string
-  name: string
-  email: string
-  phone: string
-  lead_source: string
-  hubspot_id: string
-  created_at: string
-  utm_source: string | null
-  utm_medium: string | null
-  utm_campaign: string | null
-  utm_content: string | null
-}
-
 export interface SalesRep {
   id: number
   name: string
@@ -71,7 +59,6 @@ export interface DropdownOptions {
   utmCampaigns: string[]
   utmContents: string[]
   callTypes: string[]
-  leadSources: string[]
 }
 
 // Query params for server-side filtering/sorting/pagination
@@ -95,7 +82,6 @@ export interface CallsQueryResult {
 export const queryKeys = {
   calls: ['calls'] as const,
   callsQuery: (params: CallsQueryParams) => ['calls', 'query', params] as const,
-  leads: ['leads'] as const,
   salesReps: ['salesReps'] as const,
   dropdownOptions: ['dropdownOptions'] as const,
   dashboardStats: ['dashboardStats'] as const,
@@ -104,18 +90,11 @@ export const queryKeys = {
 // Fetch calls with server-side filtering, sorting, and pagination
 async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQueryResult> {
   const { filters, sortKey, sortDirection, page, pageSize } = params
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H3',location:'use-dashboard-data.ts:fetchCallsWithQuery',message:'query params',data:{filters,sortKey,sortDirection,page,pageSize},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   
-  // First, fetch sales reps and leads for the name lookup
-  const [salesRepsResult, leadsResult] = await Promise.all([
-    supabase.from('sales_reps').select('id, name'),
-    supabase.from('leads').select('id, name')
-  ])
+  // Fetch sales reps for the name lookup
+  const salesRepsResult = await supabase.from('sales_reps').select('id, name')
 
   if (salesRepsResult.error) throw salesRepsResult.error
-  if (leadsResult.error) throw leadsResult.error
 
   // Create lookup maps
   const salesRepsMap = new Map<number, string>()
@@ -123,11 +102,6 @@ async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQuery
   salesRepsResult.data?.forEach((rep: { id: number; name: string }) => {
     salesRepsMap.set(rep.id, rep.name)
     salesRepsByName.set(rep.name, rep.id)
-  })
-
-  const leadsMap = new Map<string, string>()
-  leadsResult.data?.forEach((lead: { id: string; name: string }) => {
-    leadsMap.set(lead.id, lead.name)
   })
 
   // Build the query with server-side filters
@@ -145,9 +119,6 @@ async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQuery
   // Apply sales rep filter (need to convert name to ID)
   if (filters.salesRep && filters.salesRep !== 'all') {
     const repId = salesRepsByName.get(filters.salesRep)
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'use-dashboard-data.ts:fetchCallsWithQuery',message:'salesRep filter',data:{salesRep:filters.salesRep,repIdFound:Boolean(repId)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (repId) {
       query = query.eq('sales_rep_id', repId)
     }
@@ -171,12 +142,8 @@ async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQuery
   let dbSortKey = sortKey as string
   if (sortKey === 'sales_rep') {
     dbSortKey = 'sales_rep_id'
-  } else if (sortKey === 'lead_name') {
-    dbSortKey = 'lead_id'
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H3',location:'use-dashboard-data.ts:fetchCallsWithQuery',message:'sort mapping',data:{sortKey,dbSortKey,sortDirection},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+  // lead_name now maps directly to the column (no longer need lead_id mapping)
   query = query.order(dbSortKey, { ascending: sortDirection === 'asc' })
 
   // Apply pagination
@@ -187,15 +154,14 @@ async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQuery
   const { data, error, count } = await query
 
   if (error) throw error
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H4',location:'use-dashboard-data.ts:fetchCallsWithQuery',message:'query result',data:{count:count ?? 0,rows:(data || []).length,page,pageSize},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   // Transform data to match the Call interface
   const rows: Call[] = (data || []).map((call: Record<string, unknown>) => ({
     id: call.id as string,
-    lead_id: call.lead_id as string,
-    lead_name: leadsMap.get(call.lead_id as string) || 'Unknown',
+    lead_name: (call.lead_name as string) || 'Unknown',
+    lead_email: (call.lead_email as string) || null,
+    lead_phone: (call.lead_phone as string) || null,
+    hubspot_contact_url: (call.hubspot_contact_url as string) || null,
     sales_rep: salesRepsMap.get(call.sales_rep_id as number) || 'Unknown',
     sales_rep_id: call.sales_rep_id as number,
     booking_date: call.booking_date as string,
@@ -230,32 +196,27 @@ async function fetchCallsWithQuery(params: CallsQueryParams): Promise<CallsQuery
 
 // Fetch functions (legacy - fetches all calls)
 async function fetchCalls(): Promise<Call[]> {
-  const [callsResult, salesRepsResult, leadsResult] = await Promise.all([
+  const [callsResult, salesRepsResult] = await Promise.all([
     supabase.from('calls').select('*').order('call_date', { ascending: false }),
     supabase.from('sales_reps').select('id, name'),
-    supabase.from('leads').select('id, name')
   ])
 
   if (callsResult.error) throw callsResult.error
   if (salesRepsResult.error) throw salesRepsResult.error
-  if (leadsResult.error) throw leadsResult.error
 
-  // Create lookup maps for sales reps and leads
+  // Create lookup map for sales reps
   const salesRepsMap = new Map<number, string>()
   salesRepsResult.data?.forEach((rep: { id: number; name: string }) => {
     salesRepsMap.set(rep.id, rep.name)
   })
 
-  const leadsMap = new Map<string, string>()
-  leadsResult.data?.forEach((lead: { id: string; name: string }) => {
-    leadsMap.set(lead.id, lead.name)
-  })
-
   // Transform data to match the expected Call interface
   return (callsResult.data || []).map((call: Record<string, unknown>) => ({
     id: call.id as string,
-    lead_id: call.lead_id as string,
-    lead_name: leadsMap.get(call.lead_id as string) || 'Unknown',
+    lead_name: (call.lead_name as string) || 'Unknown',
+    lead_email: (call.lead_email as string) || null,
+    lead_phone: (call.lead_phone as string) || null,
+    hubspot_contact_url: (call.hubspot_contact_url as string) || null,
     sales_rep: salesRepsMap.get(call.sales_rep_id as number) || 'Unknown',
     sales_rep_id: call.sales_rep_id as number,
     booking_date: call.booking_date as string,
@@ -275,16 +236,6 @@ async function fetchCalls(): Promise<Call[]> {
     demo_type: (call.demo_type as Call['demo_type']) || null,
     zoom_recording_url: (call.zoom_recording_url as string) || null,
   }))
-}
-
-async function fetchLeads(): Promise<Lead[]> {
-  const { data, error } = await supabase
-    .from('leads')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  if (error) throw error
-  return data || []
 }
 
 async function fetchSalesReps(): Promise<SalesRep[]> {
@@ -309,7 +260,6 @@ async function fetchDropdownOptions(): Promise<DropdownOptions> {
     utmCampaigns: data?.utmCampaigns || [],
     utmContents: data?.utmContents || [],
     callTypes: data?.callTypes || [],
-    leadSources: data?.leadSources || [],
   }
 }
 
@@ -377,19 +327,6 @@ export function useCallsQuery(params: CallsQueryParams) {
   }
 }
 
-export function useLeads() {
-  const { data: leads, isLoading: loading, error } = useQuery({
-    queryKey: queryKeys.leads,
-    queryFn: fetchLeads,
-  })
-
-  return {
-    leads: leads ?? [],
-    loading,
-    error: error?.message ?? null,
-  }
-}
-
 export function useSalesReps() {
   const { data: salesReps, isLoading: loading, error } = useQuery({
     queryKey: queryKeys.salesReps,
@@ -417,7 +354,6 @@ export function useDropdownOptions() {
       utmCampaigns: [],
       utmContents: [],
       callTypes: [],
-      leadSources: [],
     },
     loading,
     error: error?.message ?? null,
@@ -426,7 +362,10 @@ export function useDropdownOptions() {
 
 // Mutation types
 export type AddCallData = {
-  lead_id: string
+  lead_name: string
+  lead_email?: string | null
+  lead_phone?: string | null
+  hubspot_contact_url?: string | null
   sales_rep_id: number
   booking_date: string
   call_date: string
@@ -465,23 +404,6 @@ export async function updateCall(id: string, updates: UpdateCallData) {
     .from('calls')
     .update(updates)
     .eq('id', id)
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
-}
-
-export async function addLead(leadData: {
-  name: string
-  email: string
-  phone: string
-  lead_source: string
-  hubspot_id?: string
-}) {
-  const { data, error } = await supabase
-    .from('leads')
-    .insert(leadData)
     .select()
     .single()
 
@@ -543,6 +465,18 @@ export function useUpdateCall() {
             const updatedCall = { ...call }
             
             // Handle each possible update field
+            if (updates.lead_name !== undefined) {
+              updatedCall.lead_name = updates.lead_name
+            }
+            if (updates.lead_email !== undefined) {
+              updatedCall.lead_email = updates.lead_email ?? null
+            }
+            if (updates.lead_phone !== undefined) {
+              updatedCall.lead_phone = updates.lead_phone ?? null
+            }
+            if (updates.hubspot_contact_url !== undefined) {
+              updatedCall.hubspot_contact_url = updates.hubspot_contact_url ?? null
+            }
             if (updates.booking_status !== undefined) {
               updatedCall.booking_status = updates.booking_status
             }
@@ -575,7 +509,6 @@ export function useUpdateCall() {
             if (updates.zoom_recording_url !== undefined) {
               updatedCall.zoom_recording_url = updates.zoom_recording_url
             }
-            // New fields for inline editing
             if (updates.booking_date !== undefined) {
               updatedCall.booking_date = updates.booking_date
             }
@@ -596,13 +529,6 @@ export function useUpdateCall() {
             }
             if (updates.utm_content !== undefined) {
               updatedCall.utm_content = updates.utm_content
-            }
-            // For lead_id, also update lead_name from cached leads
-            if (updates.lead_id !== undefined) {
-              updatedCall.lead_id = updates.lead_id
-              const leadsData = queryClient.getQueryData<Lead[]>(queryKeys.leads)
-              const lead = leadsData?.find(l => l.id === updates.lead_id)
-              if (lead) updatedCall.lead_name = lead.name
             }
             
             return updatedCall
@@ -641,18 +567,6 @@ export function useUpdateCall() {
     // Always refetch after error or success to ensure consistency
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['calls'] })
-    },
-  })
-}
-
-export function useAddLead() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: addLead,
-    onSuccess: () => {
-      // Invalidate and refetch leads
-      queryClient.invalidateQueries({ queryKey: queryKeys.leads })
     },
   })
 }

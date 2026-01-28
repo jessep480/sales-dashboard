@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { AddCallModal, AddCallData } from "@/components/dashboard/add-call-modal"
-import { useCallsQuery, useLeads, useDropdownOptions, useAddCall, useUpdateCall } from "@/hooks/use-dashboard-data"
-import { parseDbError } from "@/lib/utils"
+import { useCallsQuery, useDropdownOptions, useAddCall, useUpdateCall } from "@/hooks/use-dashboard-data"
+import { normalizeHttpUrl, parseDbError } from "@/lib/utils"
 import type { Filters } from "@/lib/types"
 import type { Call } from "@/hooks/use-dashboard-data"
 import {
@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from "lucide-react"
+import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -104,6 +104,8 @@ export default function CallsPage() {
   const [sortKey, setSortKey] = useState<SortKey>("booking_date")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [page, setPage] = useState(0)
+  const [leadNameErrors, setLeadNameErrors] = useState<Record<string, string>>({})
+  const [hubspotErrors, setHubspotErrors] = useState<Record<string, string>>({})
 
   // Fetch data with server-side filtering, sorting, and pagination
   const { data: callsData, loading: callsLoading, isFetching, error: callsError } = useCallsQuery({
@@ -113,7 +115,6 @@ export default function CallsPage() {
     page,
     pageSize: PAGE_SIZE,
   })
-  const { leads, loading: leadsLoading } = useLeads()
   const { options, loading: optionsLoading } = useDropdownOptions()
 
   // Mutations
@@ -126,9 +127,6 @@ export default function CallsPage() {
 
   // Reset page when filters change
   const handleFiltersChange = (newFilters: Filters) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:handleFiltersChange',message:'filters change',data:{prevFilters:filters,nextFilters:newFilters,prevPage:page},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setFilters(newFilters)
     setPage(0) // Reset to first page when filters change
   }
@@ -150,27 +148,48 @@ export default function CallsPage() {
   }
 
   const handleUpdateCall = (id: string, field: string, value: string | number | null) => {
+    if (field === "lead_name") {
+      const trimmed = String(value ?? "").trim()
+      if (!trimmed) {
+        setLeadNameErrors((prev) => ({ ...prev, [id]: "Lead name is required." }))
+        return
+      }
+      setLeadNameErrors((prev) => {
+        if (!prev[id]) return prev
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+      updateCallMutation.mutate({ id, updates: { lead_name: trimmed } })
+      return
+    }
+
+    if (field === "hubspot_contact_url") {
+      const raw = String(value ?? "")
+      const normalized = normalizeHttpUrl(raw)
+      if (raw.trim() && !normalized) {
+        setHubspotErrors((prev) => ({ ...prev, [id]: "Enter a valid http(s) URL." }))
+        return
+      }
+      setHubspotErrors((prev) => {
+        if (!prev[id]) return prev
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
+      updateCallMutation.mutate({ id, updates: { hubspot_contact_url: normalized } })
+      return
+    }
+
     // Handle sales_rep field - need to convert name to ID
     if (field === 'sales_rep') {
       const rep = options.salesReps.find(r => r.name === value)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H2',location:'calls/page.tsx:handleUpdateCall',message:'update sales_rep',data:{field,value,repFound:Boolean(rep),page,sortKey,sortDirection,filters},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (rep) {
         updateCallMutation.mutate({ id, updates: { sales_rep_id: rep.id } })
       }
       return
     }
     
-    // Handle lead_id field directly
-    if (field === 'lead_id') {
-      updateCallMutation.mutate({ id, updates: { lead_id: value as string } })
-      return
-    }
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:handleUpdateCall',message:'update field',data:{field,value,page,sortKey,sortDirection,filters},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     updateCallMutation.mutate({ id, updates: { [field]: value } })
   }
 
@@ -194,16 +213,12 @@ export default function CallsPage() {
     }).format(amount)
   }
 
-  const isLoading = callsLoading || leadsLoading || optionsLoading
+  const isLoading = callsLoading || optionsLoading
 
   // Pagination helpers
   const { rows: calls, totalCount, totalPages } = callsData
   const canGoBack = page > 0
   const canGoForward = page < totalPages - 1
-
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/c234b52f-e0bd-48ce-ad7e-257f6bed2945',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run1',hypothesisId:'H1',location:'calls/page.tsx:render',message:'render state',data:{filters,sortKey,sortDirection,page,totalCount,totalPages,isLoading,isFetching},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   return (
     <div className="space-y-6">
@@ -231,7 +246,6 @@ export default function CallsPage() {
         />
         <AddCallModal 
           onAdd={handleAddCall}
-          leads={leads}
           salesReps={options.salesReps}
           callTypes={options.callTypes}
           utmSources={options.utmSources}
@@ -305,6 +319,9 @@ export default function CallsPage() {
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead><SortableHeader column="id" label="ID" /></TableHead>
                   <TableHead><SortableHeader column="lead_name" label="Lead Name" /></TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>HubSpot</TableHead>
                   <TableHead><SortableHeader column="sales_rep" label="Sales Rep" /></TableHead>
                   <TableHead><SortableHeader column="booking_date" label="Booking Date" /></TableHead>
                   <TableHead><SortableHeader column="call_date" label="Call Date" /></TableHead>
@@ -327,24 +344,65 @@ export default function CallsPage() {
               <TableBody>
                 {calls.map((call) => (
                   <TableRow key={call.id} className="border-border">
-                    <TableCell className="font-mono text-xs text-muted-foreground">{call.id}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{call.id.slice(0, 8)}</TableCell>
                     <TableCell>
-                      <Select
-                        value={call.lead_id}
-                        onValueChange={(v) => handleUpdateCall(call.id, "lead_id", v)}
+                      <div className="space-y-1">
+                        <InlineEditInput
+                          value={call.lead_name}
+                          onCommit={(v) => handleUpdateCall(call.id, "lead_name", v)}
+                          className="h-8 w-36 bg-secondary"
+                          disabled={saving}
+                          placeholder="Lead name"
+                        />
+                        {leadNameErrors[call.id] && (
+                          <p className="text-xs text-destructive">{leadNameErrors[call.id]}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <InlineEditInput
+                        value={call.lead_email || ""}
+                        onCommit={(v) => handleUpdateCall(call.id, "lead_email", v || null)}
+                        className="h-8 w-40 bg-secondary text-muted-foreground"
                         disabled={saving}
-                      >
-                        <SelectTrigger className="h-8 w-36 bg-secondary">
-                          <SelectValue>{call.lead_name}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {leads.map((lead) => (
-                            <SelectItem key={lead.id} value={lead.id}>
-                              {lead.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder="email@..."
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <InlineEditInput
+                        value={call.lead_phone || ""}
+                        onCommit={(v) => handleUpdateCall(call.id, "lead_phone", v || null)}
+                        className="h-8 w-32 bg-secondary text-muted-foreground"
+                        disabled={saving}
+                        placeholder="(555)..."
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <InlineEditInput
+                            value={call.hubspot_contact_url || ""}
+                            onCommit={(v) => handleUpdateCall(call.id, "hubspot_contact_url", v || null)}
+                            className="h-8 w-36 bg-secondary text-muted-foreground"
+                            disabled={saving}
+                            placeholder="https://..."
+                          />
+                          {call.hubspot_contact_url && /^https?:\/\//i.test(call.hubspot_contact_url) && (
+                            <a
+                              href={call.hubspot_contact_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-blue-500 hover:text-blue-600"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              <span className="sr-only">Open HubSpot</span>
+                            </a>
+                          )}
+                        </div>
+                        {hubspotErrors[call.id] && (
+                          <p className="text-xs text-destructive">{hubspotErrors[call.id]}</p>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Select

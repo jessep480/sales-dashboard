@@ -29,7 +29,7 @@ export function useMetrics(calls: Call[]) {
     const confirmedCalls = calls.filter((c) => c.confirmation_status === "yes").length
     const showUps = calls.filter((c) => c.show_up_status === "yes").length
     const closes = calls.filter((c) => c.call_outcome === "closed_won").length
-    const totalRevenue = calls.reduce((sum, c) => sum + c.upfront_revenue, 0)
+    const totalRevenue = calls.reduce((sum, c) => sum + (c.upfront_revenue ?? 0), 0)
 
     const cancellationRate = totalCalls > 0 ? (canceledCalls / totalCalls) * 100 : 0
     const confirmationRate = callsExclCanceled > 0 ? (confirmedCalls / callsExclCanceled) * 100 : 0

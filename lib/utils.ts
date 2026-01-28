@@ -5,6 +5,21 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function normalizeHttpUrl(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+
+  try {
+    const url = new URL(withScheme)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 /**
  * Parse Supabase/PostgreSQL errors into user-friendly messages.
  * This handles constraint violations, foreign key errors, and other common database errors.
@@ -19,7 +34,7 @@ export function parseDbError(error: unknown): string {
     const match = message.match(/null value in column "(\w+)"/)
     const field = match?.[1]
     const fieldNames: Record<string, string> = {
-      lead_id: 'Lead',
+      lead_name: 'Lead Name',
       sales_rep_id: 'Sales Rep',
       booking_date: 'Booking Date',
       call_date: 'Call Date',
@@ -30,9 +45,6 @@ export function parseDbError(error: unknown): string {
   
   // Foreign key violations
   if (message.includes('violates foreign key constraint')) {
-    if (message.includes('calls_lead_id_fkey')) {
-      return 'The selected lead does not exist. Please select a valid lead.'
-    }
     if (message.includes('calls_sales_rep_id_fkey')) {
       return 'The selected sales rep does not exist. Please select a valid sales rep.'
     }
@@ -52,9 +64,6 @@ export function parseDbError(error: unknown): string {
   
   // Unique constraint violations
   if (message.includes('duplicate key value') || message.includes('unique constraint')) {
-    if (message.includes('leads_email_key')) {
-      return 'A lead with this email already exists.'
-    }
     return 'This record already exists. Duplicate values are not allowed.'
   }
   
