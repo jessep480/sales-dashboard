@@ -3,21 +3,18 @@
 import { useState, useMemo } from "react"
 import { FilterBar } from "@/components/dashboard/filter-bar"
 import { useFilteredCalls } from "@/hooks/use-filtered-calls"
-import { useCalls, useSalesReps } from "@/hooks/use-dashboard-data"
+import { useCalls, useDropdownOptions, useSalesReps } from "@/hooks/use-dashboard-data"
 import type { Filters } from "@/lib/types"
 
 // Local type for sales rep data with computed metrics
 interface SalesRepMetrics {
   name: string
-  totalCalls: number
-  callsExclCanceled: number
-  canceledCalls: number
   confirmedCalls: number
   showUps: number
+  closes: number
   totalRevenue: number
-  cancellationRate: number
-  confirmationRate: number
-  showUpRate: number
+  closeRateOfShowUps: number
+  revenuePerShowUp: number
 }
 import {
   Table,
@@ -28,8 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowUpDown } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Users } from "lucide-react"
 
 const defaultFilters: Filters = {
   dateType: "booking_date",
@@ -42,74 +38,37 @@ const defaultFilters: Filters = {
   utmContent: "all",
 }
 
-type SortKey = keyof SalesRepMetrics
-type SortDirection = "asc" | "desc"
-
 export default function SalesRepsPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters)
-  const [sortKey, setSortKey] = useState<SortKey>("totalCalls")
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
 
   // Fetch data from Supabase
   const { calls: supabaseCalls } = useCalls()
+  const { options } = useDropdownOptions()
   const { salesReps } = useSalesReps()
 
   const filteredCalls = useFilteredCalls(supabaseCalls, { ...filters, salesRep: "all" })
 
   const salesRepData = useMemo(() => {
-    const data: SalesRepMetrics[] = salesReps.map((rep) => {
+    return salesReps.map((rep) => {
       const repCalls = filteredCalls.filter((c) => c.sales_rep === rep.name)
-      const totalCalls = repCalls.length
-      const canceledCalls = repCalls.filter((c) => c.booking_status === "canceled").length
-      const callsExclCanceled = totalCalls - canceledCalls
       const confirmedCalls = repCalls.filter((c) => c.confirmation_status === "yes").length
       const showUps = repCalls.filter((c) => c.show_up_status === "yes").length
+      const closes = repCalls.filter((c) => c.call_outcome === "closed_won").length
       const totalRevenue = repCalls.reduce((sum, c) => sum + (c.upfront_revenue ?? 0), 0)
+      const closeRateOfShowUps = showUps > 0 ? (closes / showUps) * 100 : 0
+      const revenuePerShowUp = showUps > 0 ? totalRevenue / showUps : 0
 
       return {
         name: rep.name,
-        totalCalls,
-        callsExclCanceled,
-        canceledCalls,
         confirmedCalls,
         showUps,
+        closes,
         totalRevenue,
-        cancellationRate: totalCalls > 0 ? (canceledCalls / totalCalls) * 100 : 0,
-        confirmationRate: callsExclCanceled > 0 ? (confirmedCalls / callsExclCanceled) * 100 : 0,
-        showUpRate: confirmedCalls > 0 ? (showUps / confirmedCalls) * 100 : 0,
+        closeRateOfShowUps,
+        revenuePerShowUp,
       }
-    })
-
-    return data.sort((a, b) => {
-      const aVal = a[sortKey]
-      const bVal = b[sortKey]
-      const modifier = sortDirection === "asc" ? 1 : -1
-      if (typeof aVal === "string" && typeof bVal === "string") {
-        return aVal.localeCompare(bVal) * modifier
-      }
-      return ((aVal as number) - (bVal as number)) * modifier
-    })
-  }, [filteredCalls, sortKey, sortDirection])
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-    } else {
-      setSortKey(key)
-      setSortDirection("desc")
-    }
-  }
-
-  const SortableHeader = ({ column, label }: { column: SortKey; label: string }) => (
-    <Button
-      variant="ghost"
-      onClick={() => handleSort(column)}
-      className="h-auto p-0 font-medium text-muted-foreground hover:text-foreground hover:bg-transparent"
-    >
-      {label}
-      <ArrowUpDown className="ml-2 h-4 w-4" />
-    </Button>
-  )
+    }).sort((a, b) => b.totalRevenue - a.totalRevenue)
+  }, [filteredCalls, salesReps])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -123,55 +82,101 @@ export default function SalesRepsPage() {
 
   return (
     <div className="space-y-6">
-      <FilterBar filters={filters} onFiltersChange={setFilters} />
+      <FilterBar
+        filters={filters}
+        onFiltersChange={setFilters}
+        showSalesRepFilter={false}
+        utmSources={options.utmSources}
+        utmMediums={options.utmMediums}
+        utmCampaigns={options.utmCampaigns}
+        utmContents={options.utmContents}
+      />
 
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-card-foreground">Sales Rep Comparison</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+      {/* Sales Rep Cards Overview */}
+      <section className="rounded-xl bg-secondary/30 p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-5">Sales Rep Overview</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 justify-items-center">
+          {salesRepData.map((rep) => (
+            <Card key={rep.name} className="w-full max-w-[240px] border-border bg-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg text-card-foreground">{rep.name}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Featured Revenue Metric */}
+                <div className="text-center py-4">
+                  <div className="text-3xl font-bold text-chart-2">
+                    {formatCurrency(rep.totalRevenue)}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">Total Revenue</div>
+                </div>
+                
+                {/* Secondary Metrics 2x2 Grid */}
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
+                  <div className="text-center">
+                    <div className="text-xl font-semibold text-card-foreground">{rep.showUps}</div>
+                    <div className="text-xs text-muted-foreground">Show Ups</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold text-card-foreground">{rep.closes}</div>
+                    <div className="text-xs text-muted-foreground">Closes</div>
+                  </div>
+                  <div className="text-center">
+                    <div className={`text-xl font-semibold ${rep.closeRateOfShowUps >= 50 ? "text-chart-2" : "text-card-foreground"}`}>
+                      {formatPercent(rep.closeRateOfShowUps)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Close Rate</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold text-card-foreground">
+                      {formatCurrency(rep.revenuePerShowUp)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Rev/Show Up</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-xl bg-secondary/30 p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <Users className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold text-foreground">Sales Rep Performance</h2>
+        </div>
+        <Card className="border-border bg-card">
+          <CardContent className="pt-4">
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
-                  <TableHead><SortableHeader column="name" label="Rep Name" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="totalCalls" label="Total Calls" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="callsExclCanceled" label="Calls Excl. Canceled" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="canceledCalls" label="Canceled" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="confirmedCalls" label="Confirmed" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="showUps" label="Show Ups" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="totalRevenue" label="Revenue" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="cancellationRate" label="Cancel %" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="confirmationRate" label="Confirm %" /></TableHead>
-                  <TableHead className="text-right"><SortableHeader column="showUpRate" label="Show Up %" /></TableHead>
+                  <TableHead className="text-muted-foreground">Rep Name</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Confirmed</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Show Ups</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Closes</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Close Rate</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Revenue</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Rev/Show Up</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {salesRepData.map((rep) => (
                   <TableRow key={rep.name} className="border-border">
                     <TableCell className="font-medium text-card-foreground">{rep.name}</TableCell>
-                    <TableCell className="text-right text-card-foreground">{rep.totalCalls}</TableCell>
-                    <TableCell className="text-right text-card-foreground">{rep.callsExclCanceled}</TableCell>
-                    <TableCell className="text-right text-card-foreground">{rep.canceledCalls}</TableCell>
                     <TableCell className="text-right text-card-foreground">{rep.confirmedCalls}</TableCell>
                     <TableCell className="text-right text-card-foreground">{rep.showUps}</TableCell>
+                    <TableCell className="text-right text-card-foreground">{rep.closes}</TableCell>
+                    <TableCell className={`text-right ${rep.closeRateOfShowUps >= 50 ? "text-chart-2" : "text-card-foreground"}`}>
+                      {formatPercent(rep.closeRateOfShowUps)}
+                    </TableCell>
                     <TableCell className="text-right text-chart-2">{formatCurrency(rep.totalRevenue)}</TableCell>
-                    <TableCell className={`text-right ${rep.cancellationRate > 20 ? "text-destructive" : "text-card-foreground"}`}>
-                      {formatPercent(rep.cancellationRate)}
-                    </TableCell>
-                    <TableCell className={`text-right ${rep.confirmationRate >= 70 ? "text-chart-2" : "text-card-foreground"}`}>
-                      {formatPercent(rep.confirmationRate)}
-                    </TableCell>
-                    <TableCell className={`text-right ${rep.showUpRate >= 70 ? "text-chart-2" : "text-card-foreground"}`}>
-                      {formatPercent(rep.showUpRate)}
-                    </TableCell>
+                    <TableCell className="text-right text-card-foreground">{formatCurrency(rep.revenuePerShowUp)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </section>
     </div>
   )
 }

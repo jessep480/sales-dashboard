@@ -48,6 +48,7 @@ interface FilterBarProps {
   utmMediums?: string[]
   utmCampaigns?: string[]
   utmContents?: string[]
+  showSalesRepFilter?: boolean
 }
 
 export function FilterBar({ 
@@ -58,6 +59,7 @@ export function FilterBar({
   utmMediums = [],
   utmCampaigns = [],
   utmContents = [],
+  showSalesRepFilter = true,
 }: FilterBarProps) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
@@ -172,19 +174,21 @@ export function FilterBar({
         </Popover>
       </div>
 
-      <Select value={filters.salesRep} onValueChange={(v) => updateFilter("salesRep", v)}>
-        <SelectTrigger className="w-40 bg-secondary">
-          <SelectValue placeholder="Sales Rep" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Reps</SelectItem>
-          {salesReps.map((rep) => (
-            <SelectItem key={rep.id} value={rep.name}>
-              {rep.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {showSalesRepFilter && (
+        <Select value={filters.salesRep} onValueChange={(v) => updateFilter("salesRep", v)}>
+          <SelectTrigger className="w-40 bg-secondary">
+            <SelectValue placeholder="Sales Rep" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Reps</SelectItem>
+            {salesReps.map((rep) => (
+              <SelectItem key={rep.id} value={rep.name}>
+                {rep.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <Select value={filters.utmSource} onValueChange={(v) => updateFilter("utmSource", v)}>
         <SelectTrigger className="w-32 bg-secondary">
